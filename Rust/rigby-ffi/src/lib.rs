@@ -7,6 +7,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -14,9 +15,10 @@ use std::ptr;
 use std::slice;
 
 use rigby_runtime::model::Blend;
+use rigby_runtime::scene::{read_scene_manifest, ScenePlayer};
 use rigby_runtime::{
-    load_skeleton, AnimationState, Atlas, Pose, RegionLookup, RenderOutput, SkeletonData,
-    StateEventKind,
+    load_scene, load_skeleton, AnimationState, Atlas, Pose, RegionLookup, RenderOutput,
+    SkeletonData, StateEventKind,
 };
 
 pub const RIGAXIS_ABI_VERSION: u32 = 1;
@@ -179,6 +181,25 @@ struct RenderBatchView {
     indices: Vec<u32>,
 }
 
+pub struct RigAxisScene {
+    player: ScenePlayer,
+    stage_lookup: RegionLookup,
+    character_lookups: Vec<RegionLookup>,
+    source_ids: Vec<CString>,
+    actor_ids: Vec<CString>,
+    actor_names: Vec<CString>,
+    current_shot: CString,
+}
+
+#[repr(C)]
+pub struct RigAxisSceneSource {
+    pub path: *const c_char,
+    pub skeleton: *const u8,
+    pub skeleton_size: usize,
+    pub atlas: *const u8,
+    pub atlas_size: usize,
+}
+
 fn skeleton_ref<'a>(skeleton: *const RigAxisSkeleton) -> Option<&'a RigAxisSkeleton> {
     if skeleton.is_null() {
         None
@@ -200,6 +221,33 @@ fn lookup_ref<'a>(lookup: *const RigAxisLookup) -> Option<&'a RigAxisLookup> {
         None
     } else {
         Some(unsafe { &*lookup })
+    }
+}
+
+fn scene_ref<'a>(scene: *const RigAxisScene) -> Option<&'a RigAxisScene> {
+    if scene.is_null() {
+        None
+    } else {
+        Some(unsafe { &*scene })
+    }
+}
+
+fn scene_mut<'a>(scene: *mut RigAxisScene) -> Option<&'a mut RigAxisScene> {
+    if scene.is_null() {
+        None
+    } else {
+        Some(unsafe { &mut *scene })
+    }
+}
+
+fn affine_value(affine: &rigby_runtime::math::Affine) -> RigAxisAffine {
+    RigAxisAffine {
+        a: affine.a,
+        b: affine.b,
+        c: affine.c,
+        d: affine.d,
+        tx: affine.tx,
+        ty: affine.ty,
     }
 }
 
@@ -306,6 +354,14 @@ fn render_ref<'a>(render: *const RigAxisRender) -> Option<&'a RigAxisRender> {
         None
     } else {
         Some(unsafe { &*render })
+    }
+}
+
+fn render_mut<'a>(render: *mut RigAxisRender) -> Option<&'a mut RigAxisRender> {
+    if render.is_null() {
+        None
+    } else {
+        Some(unsafe { &mut *render })
     }
 }
 
@@ -1078,6 +1134,43 @@ pub unsafe extern "C" fn rigaxis_render_free(render: *mut RigAxisRender) {
     }
 }
 
+fn update_batch_views(render: &mut RigAxisRender) {
+    let RigAxisRender { output, batches } = render;
+    let native_batches = output.batches();
+    if batches.len() != native_batches.len() {
+        batches.resize_with(native_batches.len(), RenderBatchView::default);
+    }
+    for (view, batch) in batches.iter_mut().zip(native_batches) {
+        view.source = batch.source as u32;
+        view.page = batch.page as u32;
+        view.blend = blend_value(batch.blend);
+        view.vertices.clear();
+        view.indices.clear();
+        view.indices.extend_from_slice(&batch.indices);
+
+        for index in 0..batch.positions.len() {
+            let position = batch.positions[index];
+            let uv = batch.uvs[index];
+            let light = batch.colors[index];
+            let dark = batch.darks[index];
+            view.vertices.push(RigAxisVertex {
+                x: position[0],
+                y: position[1],
+                u: uv[0],
+                v: uv[1],
+                light_r: light[0],
+                light_g: light[1],
+                light_b: light[2],
+                light_a: light[3],
+                dark_r: dark[0],
+                dark_g: dark[1],
+                dark_b: dark[2],
+                dark_a: dark[3],
+            });
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_render_build(
     render: *mut RigAxisRender,
@@ -1110,42 +1203,8 @@ pub unsafe extern "C" fn rigaxis_render_build(
             tint[3] as f64,
         ];
 
-        let RigAxisRender { output, batches } = render;
-        output.build(&skeleton.data, &pose.pose, &lookup.lookup, tint);
-
-        let native_batches = output.batches();
-        if batches.len() != native_batches.len() {
-            batches.resize_with(native_batches.len(), RenderBatchView::default);
-        }
-        for (view, batch) in batches.iter_mut().zip(native_batches) {
-            view.source = batch.source as u32;
-            view.page = batch.page as u32;
-            view.blend = blend_value(batch.blend);
-            view.vertices.clear();
-            view.indices.clear();
-            view.indices.extend_from_slice(&batch.indices);
-
-            for index in 0..batch.positions.len() {
-                let position = batch.positions[index];
-                let uv = batch.uvs[index];
-                let light = batch.colors[index];
-                let dark = batch.darks[index];
-                view.vertices.push(RigAxisVertex {
-                    x: position[0],
-                    y: position[1],
-                    u: uv[0],
-                    v: uv[1],
-                    light_r: light[0],
-                    light_g: light[1],
-                    light_b: light[2],
-                    light_a: light[3],
-                    dark_r: dark[0],
-                    dark_g: dark[1],
-                    dark_b: dark[2],
-                    dark_a: dark[3],
-                });
-            }
-        }
+        render.output.build(&skeleton.data, &pose.pose, &lookup.lookup, tint);
+        update_batch_views(render);
         Ok(())
     })
 }
@@ -1182,6 +1241,336 @@ pub unsafe extern "C" fn rigaxis_render_batch_at(
         };
     }
     true
+}
+
+fn atlas_from_bytes(bytes: &[u8]) -> Result<Atlas, String> {
+    let text = std::str::from_utf8(bytes).map_err(|error| format!("atlas is not UTF-8: {error}"))?;
+    Ok(Atlas::parse(text))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_create(
+    manifest: *const u8,
+    manifest_size: usize,
+    sources: *const RigAxisSceneSource,
+    source_count: u32,
+    out: *mut *mut RigAxisScene,
+) -> RigAxisStatus {
+    clear_error();
+    if out.is_null()
+        || (manifest.is_null() && manifest_size != 0)
+        || (sources.is_null() && source_count != 0)
+    {
+        set_error("invalid argument");
+        return RigAxisStatus::InvalidArgument;
+    }
+    unsafe {
+        *out = ptr::null_mut();
+    }
+
+    guard(|| {
+        let manifest_bytes: &[u8] = if manifest_size == 0 {
+            &[]
+        } else {
+            unsafe { slice::from_raw_parts(manifest, manifest_size) }
+        };
+
+        let mut files: HashMap<String, (Vec<u8>, Vec<u8>)> = HashMap::new();
+        for index in 0..source_count as usize {
+            let source = unsafe { &*sources.add(index) };
+            if source.path.is_null()
+                || (source.skeleton.is_null() && source.skeleton_size != 0)
+                || (source.atlas.is_null() && source.atlas_size != 0)
+            {
+                return Err("invalid scene source".to_string());
+            }
+            let path = unsafe { CStr::from_ptr(source.path) }
+                .to_string_lossy()
+                .to_string();
+            let skeleton = if source.skeleton_size == 0 {
+                Vec::new()
+            } else {
+                unsafe { slice::from_raw_parts(source.skeleton, source.skeleton_size) }.to_vec()
+            };
+            let atlas = if source.atlas_size == 0 {
+                Vec::new()
+            } else {
+                unsafe { slice::from_raw_parts(source.atlas, source.atlas_size) }.to_vec()
+            };
+            files.insert(path, (skeleton, atlas));
+        }
+
+        let mut player = load_scene(manifest_bytes, |file| {
+            files
+                .get(file)
+                .map(|(skeleton, _)| skeleton.clone())
+                .ok_or_else(|| format!("missing scene source '{file}'"))
+        })
+        .map_err(|error| error.0)?;
+
+        let scene_manifest = read_scene_manifest(manifest_bytes).map_err(|error| error.0)?;
+        let (_, stage_atlas) = files
+            .get(&scene_manifest.stage)
+            .ok_or_else(|| format!("missing scene source '{}'", scene_manifest.stage))?;
+        let stage_lookup = RegionLookup::new(&player.stage, &atlas_from_bytes(stage_atlas)?);
+
+        let mut source_ids = Vec::with_capacity(player.characters.len() + 1);
+        source_ids.push(c_string(""));
+        let mut character_lookups = Vec::with_capacity(player.characters.len());
+        for character in &player.characters {
+            let actor = scene_manifest
+                .scene
+                .actors
+                .iter()
+                .find(|actor| actor.id == character.id)
+                .ok_or_else(|| format!("scene actor '{}' not found", character.id))?;
+            let path = actor
+                .skeleton
+                .as_ref()
+                .ok_or_else(|| format!("scene actor '{}' has no skeleton", actor.id))?;
+            let (_, atlas) = files
+                .get(path)
+                .ok_or_else(|| format!("missing scene source '{path}'"))?;
+            character_lookups.push(RegionLookup::new(&character.data, &atlas_from_bytes(atlas)?));
+            source_ids.push(c_string(&character.id));
+        }
+
+        let actor_ids = scene_manifest
+            .scene
+            .actors
+            .iter()
+            .map(|actor| c_string(&actor.id))
+            .collect();
+        let actor_names = scene_manifest
+            .scene
+            .actors
+            .iter()
+            .map(|actor| c_string(&actor.name))
+            .collect();
+        let current_shot = c_string(player.shot.as_deref().unwrap_or(""));
+        player.evaluate(0.0);
+
+        unsafe {
+            *out = Box::into_raw(Box::new(RigAxisScene {
+                player,
+                stage_lookup,
+                character_lookups,
+                source_ids,
+                actor_ids,
+                actor_names,
+                current_shot,
+            }));
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_free(scene: *mut RigAxisScene) {
+    if !scene.is_null() {
+        drop(unsafe { Box::from_raw(scene) });
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_play(scene: *mut RigAxisScene, shot: *const c_char, looping: bool) {
+    clear_error();
+    if shot.is_null() {
+        set_error("invalid argument");
+        return;
+    }
+    let Ok(name) = unsafe { CStr::from_ptr(shot) }.to_str() else {
+        set_error("shot name is not UTF-8");
+        return;
+    };
+    if let Some(scene) = scene_mut(scene) {
+        scene.player.play(name, looping);
+        scene.current_shot = c_string(scene.player.shot.as_deref().unwrap_or(""));
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_update(scene: *mut RigAxisScene, delta_seconds: f64) {
+    if let Some(scene) = scene_mut(scene) {
+        scene.player.update(delta_seconds.max(0.0));
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_set_time(
+    scene: *mut RigAxisScene,
+    time: f64,
+    physics_delta: f64,
+) {
+    if let Some(scene) = scene_mut(scene) {
+        scene.player.time = time.max(0.0);
+        scene.player.evaluate(physics_delta.max(0.0));
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_duration(scene: *const RigAxisScene) -> f64 {
+    scene_ref(scene).map_or(0.0, |scene| scene.player.duration())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_time(scene: *const RigAxisScene) -> f64 {
+    scene_ref(scene).map_or(0.0, |scene| scene.player.time)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_current_shot(scene: *const RigAxisScene) -> *const c_char {
+    scene_ref(scene).map_or(ptr::null(), |scene| scene.current_shot.as_ptr())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_source_count(scene: *const RigAxisScene) -> u32 {
+    scene_ref(scene).map_or(0, |scene| scene.source_ids.len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_source_id(
+    scene: *const RigAxisScene,
+    source: u32,
+) -> *const c_char {
+    scene_ref(scene)
+        .and_then(|scene| scene.source_ids.get(source as usize))
+        .map_or(ptr::null(), |id| id.as_ptr())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_actor_count(scene: *const RigAxisScene) -> u32 {
+    scene_ref(scene).map_or(0, |scene| scene.player.scene.actors.len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_actor_id(
+    scene: *const RigAxisScene,
+    actor: u32,
+) -> *const c_char {
+    scene_ref(scene)
+        .and_then(|scene| scene.actor_ids.get(actor as usize))
+        .map_or(ptr::null(), |id| id.as_ptr())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_actor_name(
+    scene: *const RigAxisScene,
+    actor: u32,
+) -> *const c_char {
+    scene_ref(scene)
+        .and_then(|scene| scene.actor_names.get(actor as usize))
+        .map_or(ptr::null(), |name| name.as_ptr())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_actor_bone_world(
+    scene: *const RigAxisScene,
+    actor: u32,
+    bone: *const c_char,
+    out: *mut RigAxisAffine,
+) -> bool {
+    let Some(scene) = scene_ref(scene) else {
+        return false;
+    };
+    if bone.is_null() || out.is_null() {
+        return false;
+    }
+    let Ok(bone) = unsafe { CStr::from_ptr(bone) }.to_str() else {
+        return false;
+    };
+    let Some(character) = scene.player.character(actor as usize) else {
+        return false;
+    };
+    let Some(index) = character.data.find_bone(bone) else {
+        return false;
+    };
+    let Some(world) = character.pose.world.get(index) else {
+        return false;
+    };
+    unsafe {
+        *out = affine_value(world);
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_camera_world(
+    scene: *const RigAxisScene,
+    out: *mut RigAxisAffine,
+) -> bool {
+    let Some(scene) = scene_ref(scene) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let Some(index) = scene.player.stage.find_bone("camera") else {
+        return false;
+    };
+    let Some(world) = scene.player.pose.world.get(index) else {
+        return false;
+    };
+    unsafe {
+        *out = affine_value(world);
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_build_render(scene: *mut RigAxisScene, render: *mut RigAxisRender) {
+    clear_error();
+    let Some(scene) = scene_mut(scene) else {
+        set_error("invalid scene");
+        return;
+    };
+    let Some(render) = render_mut(render) else {
+        set_error("invalid render");
+        return;
+    };
+
+    render.output.clear();
+    let layers = scene.player.draw_list();
+    let mut index = 0;
+    while index < layers.len() {
+        if layers[index].actor.is_none() {
+            let start = index;
+            while index < layers.len() && layers[index].actor.is_none() {
+                index += 1;
+            }
+            let slots: Vec<usize> = layers[start..index].iter().map(|layer| layer.slot).collect();
+            render.output.append(
+                &scene.player.stage,
+                &scene.player.pose,
+                &scene.stage_lookup,
+                [1.0; 4],
+                &slots,
+                0,
+            );
+        } else {
+            let layer = layers[index];
+            if let Some(character) = scene.player.character(layer.actor.unwrap()) {
+                if let Some(character_index) = scene
+                    .player
+                    .characters
+                    .iter()
+                    .position(|candidate| candidate.id == character.id)
+                {
+                    let slots = character.pose.draw_order.clone();
+                    render.output.append(
+                        &character.data,
+                        &character.pose,
+                        &scene.character_lookups[character_index],
+                        layer.tint,
+                        &slots,
+                        character_index + 1,
+                    );
+                }
+            }
+            index += 1;
+        }
+    }
+    update_batch_views(render);
 }
 
 #[cfg(test)]
@@ -1637,6 +2026,166 @@ mod tests {
             rigaxis_state_free(state);
             rigaxis_pose_free(pose);
             rigaxis_skeleton_free(skeleton);
+        }
+    }
+
+    #[test]
+    fn builds_scene_render() {
+        const MANIFEST: &str = r#"{
+          "rigbyScene": 1.0,
+          "stage": "stage.json",
+          "actors": [{
+            "id": "hero",
+            "name": "Hero",
+            "bone": "hero",
+            "slot": "hero",
+            "skeleton": "hero.json",
+            "clips": {"shot": [{"animation": "idle"}]}
+          }]
+        }"#;
+        const STAGE: &str = r#"{
+          "skeleton": {"spine": "4.3"},
+          "bones": [
+            {"name": "root"},
+            {"name": "camera", "parent": "root"},
+            {"name": "hero", "parent": "root"}
+          ],
+          "slots": [{"name": "hero", "bone": "hero"}],
+          "skins": [],
+          "animations": {
+            "shot": {
+              "bones": {
+                "camera": {
+                  "translate": [
+                    {"time": 0, "x": 0, "y": 0},
+                    {"time": 1, "x": 10, "y": 0}
+                  ]
+                }
+              }
+            }
+          }
+        }"#;
+        const HERO: &str = r#"{
+          "skeleton": {"spine": "4.3"},
+          "bones": [{"name": "root"}],
+          "slots": [{"name": "body", "bone": "root", "attachment": "body"}],
+          "skins": [{
+            "name": "default",
+            "attachments": {
+              "body": {
+                "body": {"type": "region", "x": 0, "y": 0, "width": 32, "height": 32}
+              }
+            }
+          }],
+          "animations": {"idle": {"bones": {"root": {"translate": [{"time": 0, "x": 0, "y": 0}]}}}}
+        }"#;
+        const ATLAS: &str =
+            "atlas.png\nsize: 64,64\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nbody\n  bounds: 0,0,32,32\n";
+
+        unsafe {
+            let manifest = MANIFEST.as_bytes();
+            let stage = CString::new(STAGE).unwrap();
+            let hero = CString::new(HERO).unwrap();
+            let atlas = CString::new(ATLAS).unwrap();
+            let stage_path = CString::new("stage.json").unwrap();
+            let hero_path = CString::new("hero.json").unwrap();
+            let sources = [
+                RigAxisSceneSource {
+                    path: stage_path.as_ptr(),
+                    skeleton: stage.as_ptr() as *const u8,
+                    skeleton_size: stage.as_bytes().len(),
+                    atlas: atlas.as_ptr() as *const u8,
+                    atlas_size: atlas.as_bytes().len(),
+                },
+                RigAxisSceneSource {
+                    path: hero_path.as_ptr(),
+                    skeleton: hero.as_ptr() as *const u8,
+                    skeleton_size: hero.as_bytes().len(),
+                    atlas: atlas.as_ptr() as *const u8,
+                    atlas_size: atlas.as_bytes().len(),
+                },
+            ];
+
+            let mut scene: *mut RigAxisScene = std::ptr::null_mut();
+            let status = rigaxis_scene_create(
+                manifest.as_ptr(),
+                manifest.len(),
+                sources.as_ptr(),
+                sources.len() as u32,
+                &mut scene,
+            );
+            assert_eq!(status as i32, RigAxisStatus::Ok as i32);
+            assert!(!scene.is_null());
+
+            assert_eq!(rigaxis_scene_source_count(scene), 2);
+            assert_eq!(rigaxis_scene_actor_count(scene), 1);
+            assert_eq!(
+                CStr::from_ptr(rigaxis_scene_actor_id(scene, 0)).to_str().unwrap(),
+                "hero"
+            );
+            assert_eq!(
+                CStr::from_ptr(rigaxis_scene_actor_name(scene, 0)).to_str().unwrap(),
+                "Hero"
+            );
+            assert_eq!(
+                CStr::from_ptr(rigaxis_scene_source_id(scene, 1)).to_str().unwrap(),
+                "hero"
+            );
+
+            let shot = CString::new("shot").unwrap();
+            rigaxis_scene_play(scene, shot.as_ptr(), true);
+            rigaxis_scene_update(scene, 0.5);
+            assert_eq!(
+                CStr::from_ptr(rigaxis_scene_current_shot(scene)).to_str().unwrap(),
+                "shot"
+            );
+            assert!((rigaxis_scene_time(scene) - 0.5).abs() < 1e-9);
+            assert!(rigaxis_scene_duration(scene) >= 1.0);
+
+            let mut camera = RigAxisAffine {
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+                tx: 0.0,
+                ty: 0.0,
+            };
+            assert!(rigaxis_scene_camera_world(scene, &mut camera));
+            assert!((camera.tx - 5.0).abs() < 1e-9);
+
+            let root = CString::new("root").unwrap();
+            let mut bone = camera;
+            assert!(rigaxis_scene_actor_bone_world(
+                scene,
+                0,
+                root.as_ptr(),
+                &mut bone
+            ));
+
+            let mut render: *mut RigAxisRender = std::ptr::null_mut();
+            assert_eq!(
+                rigaxis_render_create(&mut render) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            rigaxis_scene_build_render(scene, render);
+            assert!(rigaxis_render_batch_count(render) >= 1);
+
+            let mut batch = RigAxisBatch {
+                source: 0,
+                page: 0,
+                blend: 0,
+                vertex_count: 0,
+                index_count: 0,
+                vertices: std::ptr::null(),
+                indices: std::ptr::null(),
+            };
+            assert!(rigaxis_render_batch_at(render, 0, &mut batch));
+            assert_eq!(batch.source, 1);
+            assert!(batch.vertex_count > 0);
+            assert!(batch.index_count > 0);
+
+            rigaxis_render_free(render);
+            rigaxis_scene_free(scene);
         }
     }
 }

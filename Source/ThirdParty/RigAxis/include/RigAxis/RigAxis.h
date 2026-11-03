@@ -27,6 +27,7 @@ typedef struct RigAxisLookup RigAxisLookup;
 typedef struct RigAxisPose RigAxisPose;
 typedef struct RigAxisState RigAxisState;
 typedef struct RigAxisRender RigAxisRender;
+typedef struct RigAxisScene RigAxisScene;
 
 typedef struct RigAxisAffine
 {
@@ -64,6 +65,15 @@ typedef struct RigAxisBatch
     const RigAxisVertex* vertices;
     const uint32_t* indices;
 } RigAxisBatch;
+
+typedef struct RigAxisSceneSource
+{
+    const char* path;
+    const uint8_t* skeleton;
+    size_t skeleton_size;
+    const uint8_t* atlas;
+    size_t atlas_size;
+} RigAxisSceneSource;
 
 typedef enum RigAxisEventKind
 {
@@ -150,6 +160,23 @@ void rigaxis_render_free(RigAxisRender* render);
 RigAxisStatus rigaxis_render_build(RigAxisRender* render, const RigAxisSkeleton* skeleton, const RigAxisPose* pose, const RigAxisLookup* lookup, const float tint[4]);
 uint32_t rigaxis_render_batch_count(const RigAxisRender* render);
 bool rigaxis_render_batch_at(const RigAxisRender* render, uint32_t index, RigAxisBatch* out);
+
+RigAxisStatus rigaxis_scene_create(const uint8_t* manifest, size_t manifest_size, const RigAxisSceneSource* sources, uint32_t source_count, RigAxisScene** out);
+void rigaxis_scene_free(RigAxisScene* scene);
+void rigaxis_scene_play(RigAxisScene* scene, const char* shot, bool looping);
+void rigaxis_scene_update(RigAxisScene* scene, double delta_seconds);
+void rigaxis_scene_set_time(RigAxisScene* scene, double time, double physics_delta);
+double rigaxis_scene_duration(const RigAxisScene* scene);
+double rigaxis_scene_time(const RigAxisScene* scene);
+const char* rigaxis_scene_current_shot(const RigAxisScene* scene);
+uint32_t rigaxis_scene_source_count(const RigAxisScene* scene);
+const char* rigaxis_scene_source_id(const RigAxisScene* scene, uint32_t source);
+uint32_t rigaxis_scene_actor_count(const RigAxisScene* scene);
+const char* rigaxis_scene_actor_id(const RigAxisScene* scene, uint32_t actor);
+const char* rigaxis_scene_actor_name(const RigAxisScene* scene, uint32_t actor);
+bool rigaxis_scene_actor_bone_world(const RigAxisScene* scene, uint32_t actor, const char* bone, RigAxisAffine* out);
+bool rigaxis_scene_camera_world(const RigAxisScene* scene, RigAxisAffine* out);
+void rigaxis_scene_build_render(RigAxisScene* scene, RigAxisRender* render);
 
 #ifdef __cplusplus
 }
