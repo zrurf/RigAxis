@@ -13,7 +13,10 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::slice;
 
-use rigby_runtime::{load_skeleton, AnimationState, Atlas, Pose, RegionLookup, SkeletonData};
+use rigby_runtime::model::Blend;
+use rigby_runtime::{
+    load_skeleton, AnimationState, Atlas, Pose, RegionLookup, RenderOutput, SkeletonData,
+};
 
 pub const RIGAXIS_ABI_VERSION: u32 = 1;
 const VERSION: &[u8] = b"0.1.0\0";
@@ -75,7 +78,6 @@ pub struct RigAxisAtlas {
 }
 
 pub struct RigAxisLookup {
-    #[allow(dead_code)]
     lookup: RegionLookup,
     missing: Vec<CString>,
 }
@@ -96,6 +98,48 @@ pub struct RigAxisPose {
 
 pub struct RigAxisState {
     state: AnimationState,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct RigAxisVertex {
+    pub x: f32,
+    pub y: f32,
+    pub u: f32,
+    pub v: f32,
+    pub light_r: f32,
+    pub light_g: f32,
+    pub light_b: f32,
+    pub light_a: f32,
+    pub dark_r: f32,
+    pub dark_g: f32,
+    pub dark_b: f32,
+    pub dark_a: f32,
+}
+
+#[repr(C)]
+pub struct RigAxisBatch {
+    pub source: u32,
+    pub page: u32,
+    pub blend: u32,
+    pub vertex_count: u32,
+    pub index_count: u32,
+    pub vertices: *const RigAxisVertex,
+    pub indices: *const u32,
+}
+
+pub struct RigAxisRender {
+    output: RenderOutput,
+    batches: Vec<RenderBatchView>,
+}
+
+#[derive(Default)]
+struct RenderBatchView {
+    source: u32,
+    page: u32,
+    blend: u32,
+    vertices: Vec<RigAxisVertex>,
+    indices: Vec<u32>,
 }
 
 fn skeleton_ref<'a>(skeleton: *const RigAxisSkeleton) -> Option<&'a RigAxisSkeleton> {
@@ -135,6 +179,23 @@ fn state_ref<'a>(state: *const RigAxisState) -> Option<&'a RigAxisState> {
         None
     } else {
         Some(unsafe { &*state })
+    }
+}
+
+fn render_ref<'a>(render: *const RigAxisRender) -> Option<&'a RigAxisRender> {
+    if render.is_null() {
+        None
+    } else {
+        Some(unsafe { &*render })
+    }
+}
+
+fn blend_value(blend: Blend) -> u32 {
+    match blend {
+        Blend::Normal => 0,
+        Blend::Additive => 1,
+        Blend::Multiply => 2,
+        Blend::Screen => 3,
     }
 }
 
@@ -801,6 +862,144 @@ pub unsafe extern "C" fn rigaxis_state_apply(
     state.state.apply(&skeleton.data, &mut pose.pose);
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_render_create(out: *mut *mut RigAxisRender) -> RigAxisStatus {
+    clear_error();
+    if out.is_null() {
+        set_error("invalid argument");
+        return RigAxisStatus::InvalidArgument;
+    }
+    unsafe {
+        *out = ptr::null_mut();
+    }
+
+    guard(|| {
+        let render = RigAxisRender {
+            output: RenderOutput::default(),
+            batches: Vec::new(),
+        };
+        unsafe {
+            *out = Box::into_raw(Box::new(render));
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_render_free(render: *mut RigAxisRender) {
+    if !render.is_null() {
+        unsafe {
+            drop(Box::from_raw(render));
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_render_build(
+    render: *mut RigAxisRender,
+    skeleton: *const RigAxisSkeleton,
+    pose: *const RigAxisPose,
+    lookup: *const RigAxisLookup,
+    tint: *const f32,
+) -> RigAxisStatus {
+    clear_error();
+    if render.is_null()
+        || skeleton.is_null()
+        || pose.is_null()
+        || lookup.is_null()
+        || tint.is_null()
+    {
+        set_error("invalid argument");
+        return RigAxisStatus::InvalidArgument;
+    }
+
+    guard(|| {
+        let render = unsafe { &mut *render };
+        let skeleton = unsafe { &*skeleton };
+        let pose = unsafe { &*pose };
+        let lookup = unsafe { &*lookup };
+        let tint = unsafe { slice::from_raw_parts(tint, 4) };
+        let tint = [
+            tint[0] as f64,
+            tint[1] as f64,
+            tint[2] as f64,
+            tint[3] as f64,
+        ];
+
+        let RigAxisRender { output, batches } = render;
+        output.build(&skeleton.data, &pose.pose, &lookup.lookup, tint);
+
+        let native_batches = output.batches();
+        if batches.len() != native_batches.len() {
+            batches.resize_with(native_batches.len(), RenderBatchView::default);
+        }
+        for (view, batch) in batches.iter_mut().zip(native_batches) {
+            view.source = batch.source as u32;
+            view.page = batch.page as u32;
+            view.blend = blend_value(batch.blend);
+            view.vertices.clear();
+            view.indices.clear();
+            view.indices.extend_from_slice(&batch.indices);
+
+            for index in 0..batch.positions.len() {
+                let position = batch.positions[index];
+                let uv = batch.uvs[index];
+                let light = batch.colors[index];
+                let dark = batch.darks[index];
+                view.vertices.push(RigAxisVertex {
+                    x: position[0],
+                    y: position[1],
+                    u: uv[0],
+                    v: uv[1],
+                    light_r: light[0],
+                    light_g: light[1],
+                    light_b: light[2],
+                    light_a: light[3],
+                    dark_r: dark[0],
+                    dark_g: dark[1],
+                    dark_b: dark[2],
+                    dark_a: dark[3],
+                });
+            }
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_render_batch_count(render: *const RigAxisRender) -> u32 {
+    render_ref(render).map_or(0, |render| render.batches.len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_render_batch_at(
+    render: *const RigAxisRender,
+    index: u32,
+    out: *mut RigAxisBatch,
+) -> bool {
+    let Some(render) = render_ref(render) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let Some(batch) = render.batches.get(index as usize) else {
+        return false;
+    };
+    unsafe {
+        *out = RigAxisBatch {
+            source: batch.source,
+            page: batch.page,
+            blend: batch.blend,
+            vertex_count: batch.vertices.len() as u32,
+            index_count: batch.indices.len() as u32,
+            vertices: batch.vertices.as_ptr(),
+            indices: batch.indices.as_ptr(),
+        };
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -840,6 +1039,28 @@ mod tests {
         }
       }
     }"#;
+    const RENDER_SKELETON: &str = r#"{
+      "skeleton": {"spine": "4.3"},
+      "bones": [
+        {"name": "root"},
+        {"name": "bone", "parent": "root"}
+      ],
+      "slots": [
+        {"name": "slot", "bone": "bone", "attachment": "image"}
+      ],
+      "skins": [
+        {
+          "name": "default",
+          "attachments": {
+            "slot": {
+              "image": {"type": "region", "x": 0, "y": 0, "width": 32, "height": 32}
+            }
+          }
+        }
+      ],
+      "animations": {}
+    }"#;
+    const RENDER_ATLAS: &str = "render.png\nsize: 64,64\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nimage\n  bounds: 0,0,32,32\n";
 
     #[test]
     fn loads_skeleton_and_atlas() {
@@ -1032,6 +1253,92 @@ mod tests {
 
             rigaxis_state_free(state);
             rigaxis_pose_free(pose);
+            rigaxis_skeleton_free(skeleton);
+        }
+    }
+
+    #[test]
+    fn builds_render_batches() {
+        unsafe {
+            let mut skeleton: *mut RigAxisSkeleton = ptr::null_mut();
+            assert_eq!(
+                rigaxis_skeleton_create(
+                    RENDER_SKELETON.as_ptr(),
+                    RENDER_SKELETON.len(),
+                    &mut skeleton
+                ) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut atlas: *mut RigAxisAtlas = ptr::null_mut();
+            assert_eq!(
+                rigaxis_atlas_create(RENDER_ATLAS.as_ptr(), RENDER_ATLAS.len(), &mut atlas) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut lookup: *mut RigAxisLookup = ptr::null_mut();
+            assert_eq!(
+                rigaxis_lookup_create(skeleton, atlas, &mut lookup) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut pose: *mut RigAxisPose = ptr::null_mut();
+            assert_eq!(
+                rigaxis_pose_create(skeleton, &mut pose) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            rigaxis_pose_reset(skeleton, pose);
+            rigaxis_pose_update_world(skeleton, pose);
+
+            let mut render: *mut RigAxisRender = ptr::null_mut();
+            assert_eq!(
+                rigaxis_render_create(&mut render) as i32,
+                RigAxisStatus::Ok as i32
+            );
+
+            let tint = [1.0f32, 1.0, 1.0, 1.0];
+            assert_eq!(
+                rigaxis_render_build(render, skeleton, pose, lookup, tint.as_ptr()) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            assert_eq!(rigaxis_render_batch_count(render), 1);
+
+            let mut batch = RigAxisBatch {
+                source: 0,
+                page: 0,
+                blend: 0,
+                vertex_count: 0,
+                index_count: 0,
+                vertices: ptr::null(),
+                indices: ptr::null(),
+            };
+            assert!(rigaxis_render_batch_at(render, 0, &mut batch));
+            assert_eq!(batch.page, 0);
+            assert_eq!(batch.blend, 0);
+            assert_eq!(batch.vertex_count, 4);
+            assert_eq!(batch.index_count, 6);
+
+            let vertices = std::slice::from_raw_parts(batch.vertices, 4);
+            let indices = std::slice::from_raw_parts(batch.indices, 6);
+            assert_eq!(indices, &[0, 1, 2, 0, 2, 3]);
+            for vertex in vertices {
+                assert!(vertex.x.abs() <= 16.0 + 1e-5);
+                assert!(vertex.y.abs() <= 16.0 + 1e-5);
+                assert!((0.0..=1.0).contains(&vertex.u));
+                assert!((0.0..=1.0).contains(&vertex.v));
+                assert!((vertex.light_r - 1.0).abs() < 1e-6);
+            }
+
+            let tint = [0.5f32, 0.5, 0.5, 1.0];
+            assert_eq!(
+                rigaxis_render_build(render, skeleton, pose, lookup, tint.as_ptr()) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            assert!(rigaxis_render_batch_at(render, 0, &mut batch));
+            let vertices = std::slice::from_raw_parts(batch.vertices, 4);
+            assert!((vertices[0].light_r - 0.5).abs() < 1e-6);
+
+            rigaxis_render_free(render);
+            rigaxis_pose_free(pose);
+            rigaxis_lookup_free(lookup);
+            rigaxis_atlas_free(atlas);
             rigaxis_skeleton_free(skeleton);
         }
     }

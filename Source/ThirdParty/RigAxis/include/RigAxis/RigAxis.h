@@ -26,6 +26,7 @@ typedef struct RigAxisAtlas RigAxisAtlas;
 typedef struct RigAxisLookup RigAxisLookup;
 typedef struct RigAxisPose RigAxisPose;
 typedef struct RigAxisState RigAxisState;
+typedef struct RigAxisRender RigAxisRender;
 
 typedef struct RigAxisAffine
 {
@@ -36,6 +37,33 @@ typedef struct RigAxisAffine
     double tx;
     double ty;
 } RigAxisAffine;
+
+typedef struct RigAxisVertex
+{
+    float x;
+    float y;
+    float u;
+    float v;
+    float light_r;
+    float light_g;
+    float light_b;
+    float light_a;
+    float dark_r;
+    float dark_g;
+    float dark_b;
+    float dark_a;
+} RigAxisVertex;
+
+typedef struct RigAxisBatch
+{
+    uint32_t source;
+    uint32_t page;
+    uint32_t blend;
+    uint32_t vertex_count;
+    uint32_t index_count;
+    const RigAxisVertex* vertices;
+    const uint32_t* indices;
+} RigAxisBatch;
 
 uint32_t rigaxis_abi_version(void);
 const char* rigaxis_version_string(void);
@@ -87,6 +115,12 @@ bool rigaxis_state_set_track_time_scale(RigAxisState* state, uint32_t track, dou
 bool rigaxis_state_set_track_time(RigAxisState* state, uint32_t track, double time);
 void rigaxis_state_update(RigAxisState* state, const RigAxisSkeleton* skeleton, double delta_seconds);
 void rigaxis_state_apply(RigAxisState* state, const RigAxisSkeleton* skeleton, RigAxisPose* pose);
+
+RigAxisStatus rigaxis_render_create(RigAxisRender** out);
+void rigaxis_render_free(RigAxisRender* render);
+RigAxisStatus rigaxis_render_build(RigAxisRender* render, const RigAxisSkeleton* skeleton, const RigAxisPose* pose, const RigAxisLookup* lookup, const float tint[4]);
+uint32_t rigaxis_render_batch_count(const RigAxisRender* render);
+bool rigaxis_render_batch_at(const RigAxisRender* render, uint32_t index, RigAxisBatch* out);
 
 #ifdef __cplusplus
 }
