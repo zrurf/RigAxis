@@ -132,5 +132,6 @@ private:
     FRigAxisMaterialSet DefaultMaterials;
 
     uint32 BoundMaterialSignature = 0;
+    uint32 BoundMaterialSetSignature = 0;
     FRigAxisSceneComponentImpl* Impl = nullptr;
 };

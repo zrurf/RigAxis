@@ -18,10 +18,27 @@ void URigAxisBoneFollowerComponent::BeginPlay()
         Target = GetOwner() ? GetOwner()->FindComponentByClass<URigAxisComponent>() : nullptr;
     }
 
-    if (Target)
+    RefreshTarget();
+}
+
+void URigAxisBoneFollowerComponent::RefreshTarget()
+{
+    URigAxisComponent* Current = Target.Get();
+    if (BoundTarget.Get() == Current)
     {
-        AddTickPrerequisiteComponent(Target);
+        return;
     }
+
+    if (BoundTarget.IsValid())
+    {
+        RemoveTickPrerequisiteComponent(BoundTarget.Get());
+    }
+    BoundTarget = Target;
+    if (Current)
+    {
+        AddTickPrerequisiteComponent(Current);
+    }
+    bWarned = false;
 }
 
 bool URigAxisBoneFollowerComponent::ComputeFollowTransform(FTransform& OutTransform) const
@@ -52,6 +69,8 @@ void URigAxisBoneFollowerComponent::TickComponent(
     {
         return;
     }
+
+    RefreshTarget();
 
     FTransform Result;
     if (!ComputeFollowTransform(Result))

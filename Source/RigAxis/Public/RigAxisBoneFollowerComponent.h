@@ -44,5 +44,8 @@ public:
         FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
+    void RefreshTarget();
+
+    TWeakObjectPtr<URigAxisComponent> BoundTarget;
     bool bWarned = false;
 };

@@ -72,6 +72,24 @@ bool FRigAxisBoneTransformTest::RunTest(const FString& Parameters)
 
     TestFalse(TEXT("missing bone"), Component->GetBoneWorldTransform(TEXT("missing"), Transform));
 
+    Component->bFlipX = true;
+    FTransform FlippedX;
+    TestTrue(TEXT("flipped bone transform"), Component->GetBoneWorldTransform(TEXT("bone"), FlippedX));
+    TestTrue(
+        TEXT("flipped location"),
+        FlippedX.GetLocation().Equals(FVector(-5.0f, 0.0f, 0.0f), 0.01f));
+    TestTrue(
+        TEXT("flipped rotation"),
+        FlippedX.GetRotation().RotateVector(FVector::ForwardVector).Equals(
+            FVector(-1.0f, 0.0f, 0.0f),
+            0.01f));
+    Component->bFlipX = false;
+    Component->bFlipY = true;
+    FTransform FlippedY;
+    TestTrue(TEXT("flipped Y bone transform"), Component->GetBoneWorldTransform(TEXT("bone"), FlippedY));
+    TestTrue(TEXT("flipped Y scale"), FMath::Abs(FlippedY.GetScale3D().Z + 1.0f) < 0.01f);
+    Component->bFlipY = false;
+
     TStrongObjectPtr<URigAxisBoneFollowerComponent> Follower(NewObject<URigAxisBoneFollowerComponent>());
     Follower->Target = Component.Get();
     Follower->Bone = TEXT("bone");

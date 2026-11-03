@@ -13,6 +13,24 @@
 
 namespace
 {
+    bool AtlasUsesPma(const FString& Text)
+    {
+        TArray<FString> Lines;
+        Text.ParseIntoArrayLines(Lines);
+        for (const FString& Line : Lines)
+        {
+            FString Key;
+            FString Value;
+            if (Line.Split(TEXT(":"), &Key, &Value)
+                && Key.TrimStartAndEnd().Equals(TEXT("pma"), ESearchCase::IgnoreCase)
+                && Value.TrimStartAndEnd().Equals(TEXT("true"), ESearchCase::IgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     bool ReadFile(const FString& Path, TArray<uint8>& OutBytes, FFeedbackContext* Warn)
     {
         if (FFileHelper::LoadFileToArray(OutBytes, *Path))
@@ -141,6 +159,17 @@ bool URigAxisSkeletonFactory::FactoryCanImport(const FString& Filename)
     {
         return false;
     }
+    if (Filename.EndsWith(TEXT(".skel"), ESearchCase::IgnoreCase)
+        || Filename.EndsWith(TEXT(".atlas"), ESearchCase::IgnoreCase))
+    {
+        return true;
+    }
+    if (Filename.EndsWith(TEXT(".json"), ESearchCase::IgnoreCase))
+    {
+        FString Text;
+        return FFileHelper::LoadFileToString(Text, *Filename)
+            && (Text.Contains(TEXT("\"spine\"")) || Text.Contains(TEXT("\"skeleton\"")));
+    }
     return Super::FactoryCanImport(Filename);
 }
 
@@ -149,7 +178,7 @@ URigAxisSkeletonFactory::URigAxisSkeletonFactory()
     bCreateNew = false;
     bEditorImport = true;
     bText = false;
-    ImportPriority = 1;
+    ImportPriority = 10;
     SupportedClass = URigAxisSkeletonAsset::StaticClass();
     Formats.Add(TEXT("skel;Rigby2D skeleton"));
     Formats.Add(TEXT("json;Rigby2D skeleton JSON"));
@@ -238,8 +267,11 @@ UObject* URigAxisSkeletonFactory::FactoryCreateFile(
         Asset = NewObject<URigAxisSkeletonAsset>(Package, FName(*AssetName), Flags);
     }
 
+    FString AtlasText;
+    FFileHelper::LoadFileToString(AtlasText, *AtlasFile);
     Asset->SkeletonBytes = SkeletonBytes;
     Asset->AtlasBytes = AtlasBytes;
+    Asset->bPremultipliedAlpha = AtlasUsesPma(AtlasText);
     Asset->AtlasPageNames = PageNames;
     Asset->AtlasPages.Reset();
     for (UTexture2D* Texture : Pages)

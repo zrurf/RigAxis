@@ -56,6 +56,7 @@ bool FRigAxisImporterTest::RunTest(const FString& Parameters)
         return false;
     }
     AtlasText.ReplaceInline(TEXT("hero.png"), *PageName);
+    AtlasText.ReplaceInline(TEXT("repeat: none"), TEXT("repeat: none\npma: true"));
     if (!FFileHelper::SaveStringToFile(AtlasText, *AtlasPath))
     {
         AddError(TEXT("cannot write atlas"));
@@ -82,6 +83,7 @@ bool FRigAxisImporterTest::RunTest(const FString& Parameters)
     {
         TestEqual(TEXT("atlas pages"), Asset->AtlasPages.Num(), 1);
         TestTrue(TEXT("skeleton data"), Asset->GetData().IsValid());
+        TestTrue(TEXT("premultiplied alpha"), Asset->bPremultipliedAlpha);
 
         TStrongObjectPtr<URigAxisComponent> Component(NewObject<URigAxisComponent>());
         Component->SkeletonAsset = Asset;

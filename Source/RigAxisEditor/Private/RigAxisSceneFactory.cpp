@@ -86,7 +86,7 @@ URigAxisSceneFactory::URigAxisSceneFactory()
     bCreateNew = false;
     bEditorImport = true;
     bText = false;
-    ImportPriority = 2;
+    ImportPriority = 100;
     SupportedClass = URigAxisSceneAsset::StaticClass();
     Formats.Add(TEXT("json;Rigby2D scene manifest"));
 }

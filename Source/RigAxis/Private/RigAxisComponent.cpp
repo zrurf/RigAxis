@@ -54,6 +54,10 @@ struct FRigAxisComponentImpl
     TSharedPtr<FRigAxisSceneState, ESPMode::ThreadSafe> SceneState;
     TWeakObjectPtr<URigAxisSkeletonAsset> BoundAsset;
     TWeakObjectPtr<UMaterialInterface> BoundMaterial;
+    const UMaterialInterface* BoundSetNormal = nullptr;
+    const UMaterialInterface* BoundSetAdditive = nullptr;
+    const UMaterialInterface* BoundSetMultiply = nullptr;
+    const UMaterialInterface* BoundSetScreen = nullptr;
     int32 AssetVersion = INDEX_NONE;
     int32 BoundSectionCount = INDEX_NONE;
 };
@@ -306,11 +310,22 @@ void URigAxisComponent::EnsurePlayer()
     Impl->AssetVersion = SkeletonAsset->GetVersion();
     BuildPageMaterials();
     Impl->BoundMaterial = MeshMaterial;
+    Impl->BoundSetNormal = MaterialSet.Normal;
+    Impl->BoundSetAdditive = MaterialSet.Additive;
+    Impl->BoundSetMultiply = MaterialSet.Multiply;
+    Impl->BoundSetScreen = MaterialSet.Screen;
 }
 
 void URigAxisComponent::DestroyPlayer()
 {
     if (!Impl)
+    {
+        return;
+    }
+    if (!Impl->Player.IsValid()
+        && !Impl->RenderData.IsValid()
+        && Impl->Sections.Num() == 0
+        && SectionMaterials.Num() == 0)
     {
         return;
     }
@@ -325,6 +340,10 @@ void URigAxisComponent::DestroyPlayer()
     }
     Impl->BoundAsset.Reset();
     Impl->BoundMaterial.Reset();
+    Impl->BoundSetNormal = nullptr;
+    Impl->BoundSetAdditive = nullptr;
+    Impl->BoundSetMultiply = nullptr;
+    Impl->BoundSetScreen = nullptr;
     Impl->AssetVersion = INDEX_NONE;
     Impl->BoundSectionCount = INDEX_NONE;
     PageMaterials.Reset();
@@ -446,12 +465,21 @@ void URigAxisComponent::UpdateMesh()
     }
 
     const int32 PageCount = SkeletonAsset ? SkeletonAsset->AtlasPages.Num() : 0;
-    const bool bMaterialsChanged = Impl->BoundMaterial.Get() != MeshMaterial.Get()
+    const bool bSetChanged = Impl->BoundSetNormal != MaterialSet.Normal.Get()
+        || Impl->BoundSetAdditive != MaterialSet.Additive.Get()
+        || Impl->BoundSetMultiply != MaterialSet.Multiply.Get()
+        || Impl->BoundSetScreen != MaterialSet.Screen.Get();
+    const bool bMaterialsChanged = bSetChanged
+        || Impl->BoundMaterial.Get() != MeshMaterial.Get()
         || PageMaterials.Num() != PageCount * 4;
     if (bMaterialsChanged)
     {
         BuildPageMaterials();
         Impl->BoundMaterial = MeshMaterial;
+        Impl->BoundSetNormal = MaterialSet.Normal;
+        Impl->BoundSetAdditive = MaterialSet.Additive;
+        Impl->BoundSetMultiply = MaterialSet.Multiply;
+        Impl->BoundSetScreen = MaterialSet.Screen;
     }
 
     FRigAxisMeshBuilder::Build(
@@ -692,12 +720,18 @@ bool URigAxisComponent::GetBoneWorldTransform(FName Bone, FTransform& OutTransfo
     const float Scale = PixelsPerUnrealUnit > KINDA_SMALL_NUMBER
         ? 1.0f / PixelsPerUnrealUnit
         : 1.0f;
-    const double Rotation = FMath::RadiansToDegrees(FMath::Atan2(Affine.b, Affine.a));
-    const double ScaleX = FMath::Sqrt(Affine.a * Affine.a + Affine.b * Affine.b);
-    const double ScaleY = FMath::Sqrt(Affine.c * Affine.c + Affine.d * Affine.d)
-        * ((Affine.a * Affine.d - Affine.b * Affine.c) < 0.0 ? -1.0 : 1.0);
-    const double X = Affine.tx * Scale * (bFlipX ? -1.0 : 1.0);
-    const double Y = Affine.ty * Scale * (bFlipY ? -1.0 : 1.0);
+    const double FlipX = bFlipX ? -1.0 : 1.0;
+    const double FlipY = bFlipY ? -1.0 : 1.0;
+    const double A = Affine.a * FlipX;
+    const double B = Affine.b * FlipY;
+    const double C = Affine.c * FlipX;
+    const double D = Affine.d * FlipY;
+    const double Rotation = FMath::RadiansToDegrees(FMath::Atan2(B, A));
+    const double ScaleX = FMath::Sqrt(A * A + B * B);
+    const double ScaleY = FMath::Sqrt(C * C + D * D)
+        * ((A * D - B * C) < 0.0 ? -1.0 : 1.0);
+    const double X = Affine.tx * FlipX * Scale;
+    const double Y = Affine.ty * FlipY * Scale;
 
     FTransform Local;
     if (Plane == ERigAxisPlane::XZ)

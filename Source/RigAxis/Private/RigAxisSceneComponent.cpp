@@ -215,6 +215,13 @@ void URigAxisSceneComponent::DestroyScene()
     {
         return;
     }
+    if (!Impl->Player.IsValid()
+        && !Impl->RenderData.IsValid()
+        && Impl->Sections.Num() == 0
+        && SectionMaterials.Num() == 0)
+    {
+        return;
+    }
 
     Impl->RenderData.Reset();
     Impl->Player.Reset();
@@ -236,6 +243,7 @@ void URigAxisSceneComponent::DestroyScene()
     DarkMaterials.Reset();
     DarkMaterialIndices.Reset();
     BoundMaterialSignature = 0;
+    BoundMaterialSetSignature = 0;
     MarkRenderStateDirty();
 }
 
@@ -266,6 +274,21 @@ void URigAxisSceneComponent::UpdateScene()
         FScopeLock Lock(&Impl->SceneState->Lock);
         Impl->SceneState->Sections = Impl->Sections;
         Impl->SceneState->Normal = Normal;
+    }
+
+    uint32 SetSignature = GetTypeHash(MeshMaterial.Get());
+    SetSignature = HashCombine(SetSignature, GetTypeHash(MaterialSet.Normal.Get()));
+    SetSignature = HashCombine(SetSignature, GetTypeHash(MaterialSet.Additive.Get()));
+    SetSignature = HashCombine(SetSignature, GetTypeHash(MaterialSet.Multiply.Get()));
+    SetSignature = HashCombine(SetSignature, GetTypeHash(MaterialSet.Screen.Get()));
+    if (SetSignature != BoundMaterialSetSignature)
+    {
+        BoundMaterialSetSignature = SetSignature;
+        BaseMaterials.Reset();
+        BaseMaterialIndices.Reset();
+        DarkMaterials.Reset();
+        DarkMaterialIndices.Reset();
+        SectionMaterials.Reset();
     }
 
     RebuildSectionMaterials();
@@ -520,6 +543,11 @@ void URigAxisSceneComponent::SetTime(float Time)
 
 void URigAxisSceneComponent::Advance(float DeltaSeconds)
 {
+    if (DeltaSeconds <= 0.0f)
+    {
+        return;
+    }
+
     EnsureScene();
     if (!Impl || !Impl->Player.IsValid())
     {
