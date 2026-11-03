@@ -514,25 +514,54 @@ void URigAxisComponent::ResetPhysics()
 
 FVector URigAxisComponent::GetBoneWorldPosition(FName Bone)
 {
+    FTransform Transform;
+    if (GetBoneWorldTransform(Bone, Transform))
+    {
+        return Transform.GetLocation();
+    }
+    return GetComponentLocation();
+}
+
+bool URigAxisComponent::GetBoneWorldTransform(FName Bone, FTransform& OutTransform)
+{
     EnsurePlayer();
     if (!Impl || !Impl->Player.IsValid() || !Impl->Data.IsValid())
     {
-        return GetComponentLocation();
+        return false;
     }
 
     RigAxisAffine Affine = {};
     if (!Impl->Player->GetBoneWorldTransform(Bone, Affine))
     {
-        return GetComponentLocation();
+        return false;
     }
 
     const float Scale = PixelsPerUnrealUnit > KINDA_SMALL_NUMBER
         ? 1.0f / PixelsPerUnrealUnit
         : 1.0f;
-    const float X = static_cast<float>(bFlipX ? -Affine.tx : Affine.tx) * Scale;
-    const float Y = static_cast<float>(bFlipY ? -Affine.ty : Affine.ty) * Scale;
-    const FVector Local = Plane == ERigAxisPlane::XZ
-        ? FVector(X, 0.0f, Y)
-        : FVector(X, Y, 0.0f);
-    return GetComponentTransform().TransformPosition(Local);
+    const double Rotation = FMath::RadiansToDegrees(FMath::Atan2(Affine.b, Affine.a));
+    const double ScaleX = FMath::Sqrt(Affine.a * Affine.a + Affine.b * Affine.b);
+    const double ScaleY = FMath::Sqrt(Affine.c * Affine.c + Affine.d * Affine.d)
+        * ((Affine.a * Affine.d - Affine.b * Affine.c) < 0.0 ? -1.0 : 1.0);
+    const double X = Affine.tx * Scale * (bFlipX ? -1.0 : 1.0);
+    const double Y = Affine.ty * Scale * (bFlipY ? -1.0 : 1.0);
+
+    FTransform Local;
+    if (Plane == ERigAxisPlane::XZ)
+    {
+        Local = FTransform(
+            FRotator(static_cast<float>(Rotation), 0.0f, 0.0f),
+            FVector(static_cast<float>(X), 0.0f, static_cast<float>(Y)),
+            FVector(static_cast<float>(ScaleX), 1.0f, static_cast<float>(ScaleY)));
+    }
+    else
+    {
+        Local = FTransform(
+            FRotator(0.0f, static_cast<float>(Rotation), 0.0f),
+            FVector(static_cast<float>(X), static_cast<float>(Y), 0.0f),
+            FVector(static_cast<float>(ScaleX), static_cast<float>(ScaleY), 1.0f));
+    }
+
+    OutTransform = Local * GetComponentTransform();
+    return true;
 }

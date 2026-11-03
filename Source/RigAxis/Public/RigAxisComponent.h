@@ -116,6 +116,9 @@ public:
     FVector GetBoneWorldPosition(FName Bone);
 
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
+    bool GetBoneWorldTransform(FName Bone, FTransform& OutTransform);
+
+    UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
     bool SetSkin(FName Skin);
 
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
