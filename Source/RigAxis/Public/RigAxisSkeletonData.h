@@ -1,0 +1,62 @@
+#pragma once
+
+#include "CoreMinimal.h"
+
+struct RigAxisSkeleton;
+struct RigAxisAtlas;
+struct RigAxisLookup;
+
+// Owns the native runtime handles. Create and use on the game thread.
+class RIGAXIS_API FRigAxisSkeletonData
+{
+public:
+    ~FRigAxisSkeletonData();
+
+    FRigAxisSkeletonData(const FRigAxisSkeletonData&) = delete;
+    FRigAxisSkeletonData& operator=(const FRigAxisSkeletonData&) = delete;
+
+    static TSharedPtr<FRigAxisSkeletonData> Create(
+        const TArray<uint8>& SkeletonBytes,
+        const TArray<uint8>& AtlasBytes,
+        FString& OutError);
+
+    RigAxisSkeleton* GetSkeleton() const { return Skeleton; }
+    RigAxisAtlas* GetAtlas() const { return Atlas; }
+    RigAxisLookup* GetLookup() const { return Lookup; }
+
+    const FString& GetFormat() const { return Format; }
+    const TArray<FString>& GetBoneNames() const { return BoneNames; }
+    const TArray<FString>& GetAnimationNames() const { return AnimationNames; }
+    const TArray<FString>& GetSkinNames() const { return SkinNames; }
+    const TArray<FString>& GetAtlasPageNames() const { return AtlasPageNames; }
+    const TArray<FString>& GetWarnings() const { return Warnings; }
+    const TArray<FString>& GetMissingRegions() const { return MissingRegions; }
+
+    int32 FindBone(FName Name) const;
+    int32 FindAnimation(FName Name) const;
+    int32 FindSkin(FName Name) const;
+
+private:
+    FRigAxisSkeletonData() = default;
+
+    bool Initialize(
+        const TArray<uint8>& SkeletonBytes,
+        const TArray<uint8>& AtlasBytes,
+        FString& OutError);
+
+    RigAxisSkeleton* Skeleton = nullptr;
+    RigAxisAtlas* Atlas = nullptr;
+    RigAxisLookup* Lookup = nullptr;
+
+    FString Format;
+    TArray<FString> BoneNames;
+    TArray<FString> AnimationNames;
+    TArray<FString> SkinNames;
+    TArray<FString> AtlasPageNames;
+    TArray<FString> Warnings;
+    TArray<FString> MissingRegions;
+
+    TMap<FName, int32> BoneIndexByName;
+    TMap<FName, int32> AnimationIndexByName;
+    TMap<FName, int32> SkinIndexByName;
+};

@@ -16,12 +16,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRigAxisNativeLoadTest, "RigAxis.Native.LoadSke
 bool FRigAxisNativeLoadTest::RunTest(const FString& Parameters)
 {
     TestEqual(TEXT("ABI version"), int32(rigaxis_abi_version()), int32(RIGAXIS_ABI_VERSION));
-    TestEqual(TEXT("last error is empty"), FString(ANSI_TO_TCHAR(rigaxis_last_error())), FString());
 
     RigAxisSkeleton* Skeleton = nullptr;
     const SIZE_T SkeletonSize = static_cast<SIZE_T>(FCStringAnsi::Strlen(MinimalSkeleton));
     RigAxisStatus Status = rigaxis_skeleton_create(reinterpret_cast<const uint8*>(MinimalSkeleton), SkeletonSize, &Skeleton);
     TestEqual(TEXT("skeleton create"), int32(Status), int32(RIGAXIS_OK));
+    TestEqual(TEXT("last error after create"), FString(ANSI_TO_TCHAR(rigaxis_last_error())), FString());
     if (Status != RIGAXIS_OK)
     {
         AddError(FString::Printf(TEXT("skeleton create failed: %s"), ANSI_TO_TCHAR(rigaxis_last_error())));
