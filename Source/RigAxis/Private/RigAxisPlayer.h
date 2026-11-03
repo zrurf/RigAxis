@@ -31,6 +31,7 @@ public:
     bool GetBoneWorldTransform(int32 BoneIndex, RigAxisAffine& Out) const;
 
     const TSharedPtr<FRigAxisSkeletonData>& GetData() const { return Data; }
+    RigAxisPose* GetPose() const { return Pose; }
     bool IsValid() const;
 
 private:
