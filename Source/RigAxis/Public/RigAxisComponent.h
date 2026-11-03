@@ -5,6 +5,7 @@
 #include "RigAxisTypes.h"
 #include "RigAxisComponent.generated.h"
 
+class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UProceduralMeshComponent;
 class URigAxisSkeletonAsset;
@@ -128,13 +129,18 @@ public:
         FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
+    void CreateRenderMesh();
     void EnsurePlayer();
     void DestroyPlayer();
     void UpdateMesh();
     void DispatchEvents();
+    void BuildPageMaterials();
 
     UPROPERTY(Transient)
     TObjectPtr<UProceduralMeshComponent> Mesh;
+
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<UMaterialInstanceDynamic>> PageMaterials;
 
     FRigAxisComponentImpl* Impl = nullptr;
 };

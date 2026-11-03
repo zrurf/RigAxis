@@ -102,11 +102,35 @@ bool FRigAxisMeshBuilderTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("uv3"), Section.UVs[3].Equals(FVector2D(0.0f, 0.5f), 1e-4));
     }
 
+    if (Section.Indices.Num() == 6)
+    {
+        const int32 Expected[] = { 0, 2, 1, 0, 3, 2 };
+        for (int32 Index = 0; Index < 6; ++Index)
+        {
+            TestEqual(
+                *FString::Printf(TEXT("winding %d"), Index),
+                Section.Indices[Index],
+                Expected[Index]);
+        }
+    }
+
     FRigAxisMeshBuilder::Build(Render, ERigAxisPlane::XZ, 1.0f, true, false, Sections);
     if (Sections.Num() == 1 && Sections[0].Positions.Num() == 4)
     {
         TestTrue(TEXT("flip x0"), Sections[0].Positions[0].Equals(FVector(16.0f, 0.0f, 16.0f), 1e-4f));
         TestTrue(TEXT("flip x1"), Sections[0].Positions[1].Equals(FVector(-16.0f, 0.0f, 16.0f), 1e-4f));
+    }
+
+    if (Sections.Num() == 1 && Sections[0].Indices.Num() == 6)
+    {
+        const int32 Expected[] = { 0, 1, 2, 0, 2, 3 };
+        for (int32 Index = 0; Index < 6; ++Index)
+        {
+            TestEqual(
+                *FString::Printf(TEXT("flip x winding %d"), Index),
+                Sections[0].Indices[Index],
+                Expected[Index]);
+        }
     }
 
     FRigAxisMeshBuilder::Build(Render, ERigAxisPlane::XY, 1.0f, false, false, Sections);

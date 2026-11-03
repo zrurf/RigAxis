@@ -40,10 +40,16 @@ void FRigAxisMeshBuilder::Build(
             Section.Colors.Add(Vertex.Light);
         }
 
+        const bool bReverseWinding = bFlipX == bFlipY;
         Section.Indices.Reserve(Batch.Indices.Num());
-        for (const uint32 Index : Batch.Indices)
+        for (int32 Index = 0; Index + 2 < static_cast<int32>(Batch.Indices.Num()); Index += 3)
         {
-            Section.Indices.Add(static_cast<int32>(Index));
+            const int32 A = static_cast<int32>(Batch.Indices[Index]);
+            const int32 B = static_cast<int32>(Batch.Indices[Index + 1]);
+            const int32 C = static_cast<int32>(Batch.Indices[Index + 2]);
+            Section.Indices.Add(A);
+            Section.Indices.Add(bReverseWinding ? C : B);
+            Section.Indices.Add(bReverseWinding ? B : C);
         }
     }
 }

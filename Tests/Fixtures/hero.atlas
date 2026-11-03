@@ -1,0 +1,7 @@
+hero.png
+size: 64,64
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+image
+  bounds: 0,0,32,32

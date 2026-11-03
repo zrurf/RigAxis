@@ -13,5 +13,13 @@ public class RigAxisEditor : ModuleRules
             "Engine",
             "RigAxis"
         });
+
+        PrivateDependencyModuleNames.AddRange(new string[]
+        {
+            "UnrealEd",
+            "AssetTools",
+            "AssetRegistry",
+            "ImageWrapper"
+        });
     }
 }

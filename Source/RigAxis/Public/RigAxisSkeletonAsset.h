@@ -28,6 +28,9 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "RigAxis")
     bool bPremultipliedAlpha = false;
 
+    UPROPERTY(VisibleAnywhere, Category = "RigAxis")
+    TArray<FString> AdditionalSourceFiles;
+
     TSharedPtr<FRigAxisSkeletonData> GetData() const;
     int32 GetVersion() const { return Version; }
     const FString& GetLoadError() const { return LoadError; }

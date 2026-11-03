@@ -1,5 +1,7 @@
 #include "RigAxisComponent.h"
 
+#include "Engine/Texture2D.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/App.h"
 #include "ProceduralMeshComponent.h"
 #include "RigAxisLog.h"
@@ -16,6 +18,7 @@ struct FRigAxisComponentImpl
     TUniquePtr<FRigAxisRenderData> RenderData;
     TArray<FRigAxisMeshSection> Sections;
     TWeakObjectPtr<URigAxisSkeletonAsset> BoundAsset;
+    TWeakObjectPtr<UMaterialInterface> BoundMaterial;
     int32 AssetVersion = INDEX_NONE;
 };
 
@@ -30,21 +33,18 @@ URigAxisComponent::URigAxisComponent()
     SetGenerateOverlapEvents(false);
     SetCastShadow(false);
     SetMobility(EComponentMobility::Movable);
-
-    Mesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("Mesh"));
-    Mesh->SetupAttachment(this);
-    Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    Mesh->SetGenerateOverlapEvents(false);
-    Mesh->SetCastShadow(false);
-    Mesh->SetMobility(EComponentMobility::Movable);
-    Mesh->bUseAsyncCooking = false;
 }
 
 URigAxisComponent::~URigAxisComponent()
 {
-    DestroyPlayer();
-    delete Impl;
-    Impl = nullptr;
+    if (Impl)
+    {
+        Impl->RenderData.Reset();
+        Impl->Player.Reset();
+        Impl->Data.Reset();
+        delete Impl;
+        Impl = nullptr;
+    }
 }
 
 void URigAxisComponent::BeginPlay()
@@ -110,12 +110,32 @@ void URigAxisComponent::TickComponent(
     }
 }
 
+void URigAxisComponent::CreateRenderMesh()
+{
+    if (IsValid(Mesh))
+    {
+        return;
+    }
+
+    UObject* Outer = GetOwner() ? static_cast<UObject*>(GetOwner()) : this;
+    Mesh = NewObject<UProceduralMeshComponent>(Outer);
+    Mesh->SetupAttachment(this);
+    Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+    Mesh->SetGenerateOverlapEvents(false);
+    Mesh->SetCastShadow(false);
+    Mesh->SetMobility(EComponentMobility::Movable);
+    Mesh->bUseAsyncCooking = false;
+    Mesh->RegisterComponent();
+}
+
 void URigAxisComponent::EnsurePlayer()
 {
     if (!Impl)
     {
         return;
     }
+
+    CreateRenderMesh();
 
     if (!SkeletonAsset)
     {
@@ -162,6 +182,8 @@ void URigAxisComponent::EnsurePlayer()
 
     Impl->BoundAsset = SkeletonAsset;
     Impl->AssetVersion = SkeletonAsset->GetVersion();
+    BuildPageMaterials();
+    Impl->BoundMaterial = MeshMaterial;
 }
 
 void URigAxisComponent::DestroyPlayer()
@@ -176,7 +198,9 @@ void URigAxisComponent::DestroyPlayer()
     Impl->Data.Reset();
     Impl->Sections.Reset();
     Impl->BoundAsset.Reset();
+    Impl->BoundMaterial.Reset();
     Impl->AssetVersion = INDEX_NONE;
+    PageMaterials.Reset();
 
     if (Mesh && IsValid(Mesh))
     {
@@ -187,11 +211,37 @@ void URigAxisComponent::DestroyPlayer()
     }
 }
 
+void URigAxisComponent::BuildPageMaterials()
+{
+    PageMaterials.Reset();
+    if (!SkeletonAsset || !MeshMaterial)
+    {
+        return;
+    }
+
+    for (const TObjectPtr<UTexture2D>& Texture : SkeletonAsset->AtlasPages)
+    {
+        UMaterialInstanceDynamic* Instance = UMaterialInstanceDynamic::Create(MeshMaterial, this);
+        if (Texture)
+        {
+            Instance->SetTextureParameterValue(TEXT("SpriteTexture"), Texture);
+        }
+        PageMaterials.Add(Instance);
+    }
+}
+
 void URigAxisComponent::UpdateMesh()
 {
     if (!Impl || !Mesh || !Impl->RenderData.IsValid())
     {
         return;
+    }
+
+    const int32 PageCount = SkeletonAsset ? SkeletonAsset->AtlasPages.Num() : 0;
+    if (Impl->BoundMaterial.Get() != MeshMaterial.Get() || PageMaterials.Num() != PageCount)
+    {
+        BuildPageMaterials();
+        Impl->BoundMaterial = MeshMaterial;
     }
 
     FRigAxisMeshBuilder::Build(
@@ -227,7 +277,13 @@ void URigAxisComponent::UpdateMesh()
             Section.Colors,
             Tangents,
             false);
-        Mesh->SetMaterial(Index, MeshMaterial);
+
+        UMaterialInterface* BatchMaterial = MeshMaterial;
+        if (PageMaterials.IsValidIndex(static_cast<int32>(Section.Page)))
+        {
+            BatchMaterial = PageMaterials[Section.Page];
+        }
+        Mesh->SetMaterial(Index, BatchMaterial);
     }
 
     for (int32 Index = Impl->Sections.Num(); Index < Mesh->GetNumSections(); ++Index)
