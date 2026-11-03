@@ -23,6 +23,9 @@ Tests/RigAxisTest/Plugins/
 Tests/RigAxisTest/Config/DefaultInput.ini
 Tests/RigAxisTest/Build/
 
+# Local demo content (third-party demo assets must not be redistributed)
+Tests/RigAxisTest/Content/RigAxisDemo/
+
 # Local design notes
 dev-note/
 
