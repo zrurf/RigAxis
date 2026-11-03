@@ -8,7 +8,24 @@
 class UMaterialInterface;
 class UProceduralMeshComponent;
 class URigAxisSkeletonAsset;
+class URigAxisComponent;
 struct FRigAxisComponentImpl;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(
+    FRigAxisAnimationDelegate,
+    URigAxisComponent*,
+    Component,
+    FName,
+    Animation,
+    int32,
+    Track);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+    FRigAxisAnimationEventDelegate,
+    URigAxisComponent*,
+    Component,
+    const FRigAxisAnimationEvent&,
+    Event);
 
 UCLASS(ClassGroup = (RigAxis), meta = (BlueprintSpawnableComponent))
 class RIGAXIS_API URigAxisComponent : public UMeshComponent
@@ -58,6 +75,18 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
     TObjectPtr<UMaterialInterface> MeshMaterial;
 
+    UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
+    FRigAxisAnimationDelegate OnAnimationStart;
+
+    UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
+    FRigAxisAnimationDelegate OnAnimationEnd;
+
+    UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
+    FRigAxisAnimationDelegate OnAnimationComplete;
+
+    UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
+    FRigAxisAnimationEventDelegate OnAnimationEvent;
+
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     bool Play(FName Animation, bool bInLoop = true, float MixDuration = 0.0f);
 
@@ -85,6 +114,12 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
     FVector GetBoneWorldPosition(FName Bone);
 
+    UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
+    bool SetSkin(FName Skin);
+
+    UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
+    void ResetPhysics();
+
     virtual void BeginPlay() override;
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
     virtual void TickComponent(
@@ -96,6 +131,7 @@ private:
     void EnsurePlayer();
     void DestroyPlayer();
     void UpdateMesh();
+    void DispatchEvents();
 
     UPROPERTY(Transient)
     TObjectPtr<UProceduralMeshComponent> Mesh;

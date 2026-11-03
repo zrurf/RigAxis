@@ -187,6 +187,66 @@ void FRigAxisPlayer::Apply()
     }
 }
 
+int32 FRigAxisPlayer::GetEventCount() const
+{
+    return IsValid() ? static_cast<int32>(rigaxis_state_event_count(State)) : 0;
+}
+
+bool FRigAxisPlayer::GetEvent(int32 Index, FRigAxisEvent& Out) const
+{
+    if (!IsValid() || Index < 0)
+    {
+        return false;
+    }
+
+    RigAxisEvent Native = {};
+    if (!rigaxis_state_event_at(State, static_cast<uint32>(Index), &Native))
+    {
+        return false;
+    }
+
+    Out.Kind = Native.kind;
+    Out.Track = Native.track;
+    Out.Animation = Native.animation_name ? FName(UTF8_TO_TCHAR(Native.animation_name)) : NAME_None;
+    Out.Name = Native.event_name ? FName(UTF8_TO_TCHAR(Native.event_name)) : NAME_None;
+    Out.Time = static_cast<float>(Native.time);
+    Out.LoopIndex = static_cast<int32>(Native.loop_index);
+    Out.IntValue = static_cast<int32>(Native.int_value);
+    Out.FloatValue = static_cast<float>(Native.float_value);
+    Out.StringValue = Native.string_value ? FString(UTF8_TO_TCHAR(Native.string_value)) : FString();
+    Out.Audio = Native.audio ? FName(UTF8_TO_TCHAR(Native.audio)) : NAME_None;
+    Out.Volume = static_cast<float>(Native.volume);
+    Out.Balance = static_cast<float>(Native.balance);
+    return true;
+}
+
+void FRigAxisPlayer::ClearEvents()
+{
+    if (IsValid())
+    {
+        rigaxis_state_clear_events(State);
+    }
+}
+
+bool FRigAxisPlayer::SetSkin(FName Skin)
+{
+    if (!IsValid())
+    {
+        return false;
+    }
+
+    FTCHARToUTF8 Name(*Skin.ToString());
+    return rigaxis_pose_set_skin(GetSkeleton(), Pose, Name.Get());
+}
+
+void FRigAxisPlayer::ResetPhysics()
+{
+    if (IsValid())
+    {
+        rigaxis_pose_reset_physics(Pose);
+    }
+}
+
 bool FRigAxisPlayer::GetBoneWorldTransform(FName Bone, RigAxisAffine& Out) const
 {
     if (!IsValid())

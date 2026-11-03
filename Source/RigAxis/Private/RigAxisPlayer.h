@@ -5,6 +5,22 @@
 
 class FRigAxisSkeletonData;
 
+struct FRigAxisEvent
+{
+    uint32 Kind = 0;
+    uint32 Track = 0;
+    FName Animation;
+    FName Name;
+    float Time = 0.0f;
+    int32 LoopIndex = 0;
+    int32 IntValue = 0;
+    float FloatValue = 0.0f;
+    FString StringValue;
+    FName Audio;
+    float Volume = 1.0f;
+    float Balance = 0.0f;
+};
+
 class FRigAxisPlayer
 {
 public:
@@ -26,6 +42,13 @@ public:
 
     void Update(double DeltaSeconds);
     void Apply();
+
+    int32 GetEventCount() const;
+    bool GetEvent(int32 Index, FRigAxisEvent& Out) const;
+    void ClearEvents();
+
+    bool SetSkin(FName Skin);
+    void ResetPhysics();
 
     bool GetBoneWorldTransform(FName Bone, RigAxisAffine& Out) const;
     bool GetBoneWorldTransform(int32 BoneIndex, RigAxisAffine& Out) const;

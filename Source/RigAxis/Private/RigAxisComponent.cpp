@@ -61,6 +61,7 @@ void URigAxisComponent::BeginPlay()
     if (Impl && Impl->Player.IsValid() && Impl->RenderData.IsValid() && Impl->Data.IsValid())
     {
         Impl->Player->Apply();
+        DispatchEvents();
         if (Impl->RenderData->Build(*Impl->Data, *Impl->Player, Tint))
         {
             UpdateMesh();
@@ -102,6 +103,7 @@ void URigAxisComponent::TickComponent(
 
     Impl->Player->Update(Seconds);
     Impl->Player->Apply();
+    DispatchEvents();
     if (Impl->RenderData->Build(*Impl->Data, *Impl->Player, Tint))
     {
         UpdateMesh();
@@ -234,6 +236,67 @@ void URigAxisComponent::UpdateMesh()
     }
 }
 
+void URigAxisComponent::DispatchEvents()
+{
+    if (!Impl || !Impl->Player.IsValid())
+    {
+        return;
+    }
+
+    const int32 Count = Impl->Player->GetEventCount();
+    if (Count <= 0)
+    {
+        return;
+    }
+
+    TArray<FRigAxisEvent> Events;
+    Events.Reserve(Count);
+    for (int32 Index = 0; Index < Count; ++Index)
+    {
+        FRigAxisEvent Event;
+        if (Impl->Player->GetEvent(Index, Event))
+        {
+            Events.Add(MoveTemp(Event));
+        }
+    }
+    Impl->Player->ClearEvents();
+
+    for (const FRigAxisEvent& Native : Events)
+    {
+        switch (Native.Kind)
+        {
+        case 0:
+            OnAnimationStart.Broadcast(this, Native.Animation, static_cast<int32>(Native.Track));
+            break;
+        case 1:
+            OnAnimationEnd.Broadcast(this, Native.Animation, static_cast<int32>(Native.Track));
+            break;
+        case 2:
+            OnAnimationComplete.Broadcast(this, Native.Animation, static_cast<int32>(Native.Track));
+            break;
+        case 3:
+        {
+            FRigAxisAnimationEvent Event;
+            Event.Name = Native.Name;
+            Event.Animation = Native.Animation;
+            Event.Track = static_cast<int32>(Native.Track);
+            Event.Time = Native.Time;
+            Event.LoopIndex = Native.LoopIndex;
+            Event.IntValue = Native.IntValue;
+            Event.FloatValue = Native.FloatValue;
+            Event.StringValue = Native.StringValue;
+            Event.Audio = Native.Audio;
+            Event.Volume = Native.Volume;
+            Event.Balance = Native.Balance;
+            OnAnimationEvent.Broadcast(this, Event);
+            break;
+        }
+        default:
+            break;
+        }
+    }
+}
+
 bool URigAxisComponent::Play(FName Animation, bool bInLoop, float MixDuration)
 {
     EnsurePlayer();
@@ -315,9 +378,37 @@ void URigAxisComponent::Advance(float DeltaSeconds)
 
     Impl->Player->Update(Seconds);
     Impl->Player->Apply();
+    DispatchEvents();
     if (Impl->RenderData->Build(*Impl->Data, *Impl->Player, Tint))
     {
         UpdateMesh();
+    }
+}
+
+bool URigAxisComponent::SetSkin(FName Skin)
+{
+    EnsurePlayer();
+    if (!Impl || !Impl->Player.IsValid() || !Impl->Player->SetSkin(Skin))
+    {
+        return false;
+    }
+
+    Impl->Player->Apply();
+    if (Impl->RenderData.IsValid()
+        && Impl->Data.IsValid()
+        && Impl->RenderData->Build(*Impl->Data, *Impl->Player, Tint))
+    {
+        UpdateMesh();
+    }
+    return true;
+}
+
+void URigAxisComponent::ResetPhysics()
+{
+    EnsurePlayer();
+    if (Impl && Impl->Player.IsValid())
+    {
+        Impl->Player->ResetPhysics();
     }
 }
 
