@@ -65,6 +65,32 @@ typedef struct RigAxisBatch
     const uint32_t* indices;
 } RigAxisBatch;
 
+typedef enum RigAxisEventKind
+{
+    RIGAXIS_EVENT_START = 0,
+    RIGAXIS_EVENT_END = 1,
+    RIGAXIS_EVENT_COMPLETE = 2,
+    RIGAXIS_EVENT_KEY = 3
+} RigAxisEventKind;
+
+typedef struct RigAxisEvent
+{
+    uint32_t kind;
+    uint32_t track;
+    uint32_t animation;
+    uint64_t entry;
+    const char* animation_name;
+    const char* event_name;
+    double time;
+    int64_t loop_index;
+    int64_t int_value;
+    double float_value;
+    const char* string_value;
+    const char* audio;
+    double volume;
+    double balance;
+} RigAxisEvent;
+
 uint32_t rigaxis_abi_version(void);
 const char* rigaxis_version_string(void);
 const char* rigaxis_last_error(void);
@@ -115,6 +141,9 @@ bool rigaxis_state_set_track_time_scale(RigAxisState* state, uint32_t track, dou
 bool rigaxis_state_set_track_time(RigAxisState* state, uint32_t track, double time);
 void rigaxis_state_update(RigAxisState* state, const RigAxisSkeleton* skeleton, double delta_seconds);
 void rigaxis_state_apply(RigAxisState* state, const RigAxisSkeleton* skeleton, RigAxisPose* pose);
+uint32_t rigaxis_state_event_count(const RigAxisState* state);
+bool rigaxis_state_event_at(const RigAxisState* state, uint32_t index, RigAxisEvent* out);
+void rigaxis_state_clear_events(RigAxisState* state);
 
 RigAxisStatus rigaxis_render_create(RigAxisRender** out);
 void rigaxis_render_free(RigAxisRender* render);

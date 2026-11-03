@@ -16,6 +16,7 @@ use std::slice;
 use rigby_runtime::model::Blend;
 use rigby_runtime::{
     load_skeleton, AnimationState, Atlas, Pose, RegionLookup, RenderOutput, SkeletonData,
+    StateEventKind,
 };
 
 pub const RIGAXIS_ABI_VERSION: u32 = 1;
@@ -98,6 +99,42 @@ pub struct RigAxisPose {
 
 pub struct RigAxisState {
     state: AnimationState,
+    events: Vec<EventView>,
+}
+
+struct EventView {
+    kind: u32,
+    track: u32,
+    animation: u32,
+    entry: u64,
+    animation_name: CString,
+    event_name: Option<CString>,
+    time: f64,
+    loop_index: i64,
+    int_value: i64,
+    float_value: f64,
+    string_value: Option<CString>,
+    audio: Option<CString>,
+    volume: f64,
+    balance: f64,
+}
+
+#[repr(C)]
+pub struct RigAxisEvent {
+    pub kind: u32,
+    pub track: u32,
+    pub animation: u32,
+    pub entry: u64,
+    pub animation_name: *const c_char,
+    pub event_name: *const c_char,
+    pub time: f64,
+    pub loop_index: i64,
+    pub int_value: i64,
+    pub float_value: f64,
+    pub string_value: *const c_char,
+    pub audio: *const c_char,
+    pub volume: f64,
+    pub balance: f64,
 }
 
 #[repr(C)]
@@ -179,6 +216,88 @@ fn state_ref<'a>(state: *const RigAxisState) -> Option<&'a RigAxisState> {
         None
     } else {
         Some(unsafe { &*state })
+    }
+}
+
+fn collect_events(state: &mut RigAxisState, skeleton: &RigAxisSkeleton) {
+    for event in state.state.drain_events() {
+        let animation_name = skeleton
+            .data
+            .animations
+            .get(event.animation)
+            .map(|animation| c_string(&animation.name))
+            .unwrap_or_else(|| c_string(""));
+        let track = event.track as u32;
+        let animation = event.animation as u32;
+        let entry = event.entry;
+
+        let view = match event.kind {
+            StateEventKind::Start => EventView {
+                kind: 0,
+                track,
+                animation,
+                entry,
+                animation_name,
+                event_name: None,
+                time: 0.0,
+                loop_index: 0,
+                int_value: 0,
+                float_value: 0.0,
+                string_value: None,
+                audio: None,
+                volume: 1.0,
+                balance: 0.0,
+            },
+            StateEventKind::End => EventView {
+                kind: 1,
+                track,
+                animation,
+                entry,
+                animation_name,
+                event_name: None,
+                time: 0.0,
+                loop_index: 0,
+                int_value: 0,
+                float_value: 0.0,
+                string_value: None,
+                audio: None,
+                volume: 1.0,
+                balance: 0.0,
+            },
+            StateEventKind::Complete => EventView {
+                kind: 2,
+                track,
+                animation,
+                entry,
+                animation_name,
+                event_name: None,
+                time: 0.0,
+                loop_index: 0,
+                int_value: 0,
+                float_value: 0.0,
+                string_value: None,
+                audio: None,
+                volume: 1.0,
+                balance: 0.0,
+            },
+            StateEventKind::Event(key) => EventView {
+                kind: 3,
+                track,
+                animation,
+                entry,
+                animation_name,
+                event_name: Some(c_string(&key.name)),
+                time: key.time,
+                loop_index: key.loop_index,
+                int_value: key.int,
+                float_value: key.float,
+                string_value: key.string.as_deref().map(c_string),
+                audio: key.audio.as_deref().map(c_string),
+                volume: key.volume,
+                balance: key.balance,
+            },
+        };
+        state.events.push(view);
     }
 }
 
@@ -632,7 +751,10 @@ pub unsafe extern "C" fn rigaxis_state_create(out: *mut *mut RigAxisState) -> Ri
     guard(|| {
         let state = AnimationState::new();
         unsafe {
-            *out = Box::into_raw(Box::new(RigAxisState { state }));
+            *out = Box::into_raw(Box::new(RigAxisState {
+                state,
+                events: Vec::new(),
+            }));
         }
         Ok(())
     })
@@ -689,6 +811,7 @@ pub unsafe extern "C" fn rigaxis_state_play(
             }
         }
     }
+    collect_events(state, skeleton);
     true
 }
 
@@ -722,6 +845,7 @@ pub unsafe extern "C" fn rigaxis_state_set_animation(
             *out_entry = entry;
         }
     }
+    collect_events(state, skeleton);
     true
 }
 
@@ -759,6 +883,7 @@ pub unsafe extern "C" fn rigaxis_state_add_animation(
             *out_entry = entry;
         }
     }
+    collect_events(state, skeleton);
     true
 }
 
@@ -843,8 +968,7 @@ pub unsafe extern "C" fn rigaxis_state_update(
     let state = unsafe { &mut *state };
     let skeleton = unsafe { &*skeleton };
     state.state.update(&skeleton.data, delta_seconds);
-    // Events are exposed by a later milestone.
-    state.state.drain_events();
+    collect_events(state, skeleton);
 }
 
 #[no_mangle]
@@ -860,6 +984,66 @@ pub unsafe extern "C" fn rigaxis_state_apply(
     let skeleton = unsafe { &*skeleton };
     let pose = unsafe { &mut *pose };
     state.state.apply(&skeleton.data, &mut pose.pose);
+    collect_events(state, skeleton);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_event_count(state: *const RigAxisState) -> u32 {
+    state_ref(state).map_or(0, |state| state.events.len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_event_at(
+    state: *const RigAxisState,
+    index: u32,
+    out: *mut RigAxisEvent,
+) -> bool {
+    let Some(state) = state_ref(state) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let Some(event) = state.events.get(index as usize) else {
+        return false;
+    };
+    unsafe {
+        *out = RigAxisEvent {
+            kind: event.kind,
+            track: event.track,
+            animation: event.animation,
+            entry: event.entry,
+            animation_name: event.animation_name.as_ptr(),
+            event_name: event
+                .event_name
+                .as_ref()
+                .map_or(ptr::null(), |name| name.as_ptr()),
+            time: event.time,
+            loop_index: event.loop_index,
+            int_value: event.int_value,
+            float_value: event.float_value,
+            string_value: event
+                .string_value
+                .as_ref()
+                .map_or(ptr::null(), |value| value.as_ptr()),
+            audio: event
+                .audio
+                .as_ref()
+                .map_or(ptr::null(), |value| value.as_ptr()),
+            volume: event.volume,
+            balance: event.balance,
+        };
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_clear_events(state: *mut RigAxisState) {
+    if state.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state };
+    state.events.clear();
 }
 
 #[no_mangle]
@@ -1061,6 +1245,42 @@ mod tests {
       "animations": {}
     }"#;
     const RENDER_ATLAS: &str = "render.png\nsize: 64,64\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nimage\n  bounds: 0,0,32,32\n";
+    const EVENT_SKELETON: &str = r#"{
+      "skeleton": {"spine": "4.3"},
+      "bones": [{"name": "root"}],
+      "slots": [],
+      "skins": [],
+      "events": {
+        "footstep": {"int": 7, "float": 2.5, "string": "step", "audio": "step.wav", "volume": 0.8, "balance": -0.2}
+      },
+      "animations": {
+        "walk": {
+          "events": [
+            {"time": 0.5, "name": "footstep"},
+            {"time": 1.0, "name": "done", "int": 9}
+          ]
+        }
+      }
+    }"#;
+
+    fn empty_event() -> RigAxisEvent {
+        RigAxisEvent {
+            kind: 0,
+            track: 0,
+            animation: 0,
+            entry: 0,
+            animation_name: ptr::null(),
+            event_name: ptr::null(),
+            time: 0.0,
+            loop_index: 0,
+            int_value: 0,
+            float_value: 0.0,
+            string_value: ptr::null(),
+            audio: ptr::null(),
+            volume: 1.0,
+            balance: 0.0,
+        }
+    }
 
     #[test]
     fn loads_skeleton_and_atlas() {
@@ -1339,6 +1559,83 @@ mod tests {
             rigaxis_pose_free(pose);
             rigaxis_lookup_free(lookup);
             rigaxis_atlas_free(atlas);
+            rigaxis_skeleton_free(skeleton);
+        }
+    }
+
+    #[test]
+    fn exposes_events() {
+        unsafe {
+            let mut skeleton: *mut RigAxisSkeleton = ptr::null_mut();
+            assert_eq!(
+                rigaxis_skeleton_create(
+                    EVENT_SKELETON.as_ptr(),
+                    EVENT_SKELETON.len(),
+                    &mut skeleton
+                ) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut pose: *mut RigAxisPose = ptr::null_mut();
+            assert_eq!(
+                rigaxis_pose_create(skeleton, &mut pose) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut state: *mut RigAxisState = ptr::null_mut();
+            assert_eq!(
+                rigaxis_state_create(&mut state) as i32,
+                RigAxisStatus::Ok as i32
+            );
+
+            let walk = CString::new("walk").unwrap();
+            assert!(rigaxis_state_play(
+                state,
+                skeleton,
+                walk.as_ptr(),
+                false,
+                0.0,
+                ptr::null_mut()
+            ));
+            assert_eq!(rigaxis_state_event_count(state), 1);
+
+            let mut event = empty_event();
+            assert!(rigaxis_state_event_at(state, 0, &mut event));
+            assert_eq!(event.kind, 0);
+            assert_eq!(
+                CStr::from_ptr(event.animation_name).to_str().unwrap(),
+                "walk"
+            );
+            assert!(event.event_name.is_null());
+
+            rigaxis_state_update(state, skeleton, 0.6);
+            assert_eq!(rigaxis_state_event_count(state), 2);
+            assert!(rigaxis_state_event_at(state, 1, &mut event));
+            assert_eq!(event.kind, 3);
+            assert_eq!(
+                CStr::from_ptr(event.event_name).to_str().unwrap(),
+                "footstep"
+            );
+            assert_eq!(event.int_value, 7);
+            assert!((event.float_value - 2.5).abs() < 1e-9);
+            assert_eq!(CStr::from_ptr(event.string_value).to_str().unwrap(), "step");
+            assert_eq!(CStr::from_ptr(event.audio).to_str().unwrap(), "step.wav");
+            assert!((event.volume - 0.8).abs() < 1e-9);
+            assert!((event.balance - -0.2).abs() < 1e-9);
+            assert!((event.time - 0.5).abs() < 1e-9);
+
+            rigaxis_state_update(state, skeleton, 0.5);
+            assert_eq!(rigaxis_state_event_count(state), 4);
+            assert!(rigaxis_state_event_at(state, 2, &mut event));
+            assert_eq!(event.kind, 3);
+            assert_eq!(CStr::from_ptr(event.event_name).to_str().unwrap(), "done");
+            assert_eq!(event.int_value, 9);
+            assert!(rigaxis_state_event_at(state, 3, &mut event));
+            assert_eq!(event.kind, 2);
+
+            rigaxis_state_clear_events(state);
+            assert_eq!(rigaxis_state_event_count(state), 0);
+
+            rigaxis_state_free(state);
+            rigaxis_pose_free(pose);
             rigaxis_skeleton_free(skeleton);
         }
     }
