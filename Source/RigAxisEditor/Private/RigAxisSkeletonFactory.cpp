@@ -140,6 +140,7 @@ URigAxisSkeletonFactory::URigAxisSkeletonFactory()
     bCreateNew = false;
     bEditorImport = true;
     bText = false;
+    ImportPriority = 1;
     SupportedClass = URigAxisSkeletonAsset::StaticClass();
     Formats.Add(TEXT("skel;Rigby2D skeleton"));
     Formats.Add(TEXT("json;Rigby2D skeleton JSON"));
@@ -246,4 +247,66 @@ UObject* URigAxisSkeletonFactory::FactoryCreateFile(
     Package->MarkPackageDirty();
 
     return Asset;
+}
+
+bool URigAxisSkeletonFactory::CanReimport(UObject* Obj, TArray<FString>& OutFilenames)
+{
+    URigAxisSkeletonAsset* Asset = Cast<URigAxisSkeletonAsset>(Obj);
+    if (!Asset || Asset->AdditionalSourceFiles.Num() == 0)
+    {
+        return false;
+    }
+
+    OutFilenames.Add(Asset->AdditionalSourceFiles[0]);
+    return true;
+}
+
+void URigAxisSkeletonFactory::SetReimportPaths(
+    UObject* Obj,
+    const TArray<FString>& NewReimportPaths)
+{
+    URigAxisSkeletonAsset* Asset = Cast<URigAxisSkeletonAsset>(Obj);
+    if (Asset
+        && Asset->AdditionalSourceFiles.Num() > 0
+        && NewReimportPaths.Num() > 0)
+    {
+        Asset->AdditionalSourceFiles[0] = NewReimportPaths[0];
+    }
+}
+
+EReimportResult::Type URigAxisSkeletonFactory::Reimport(UObject* Obj)
+{
+    URigAxisSkeletonAsset* Asset = Cast<URigAxisSkeletonAsset>(Obj);
+    if (!Asset || Asset->AdditionalSourceFiles.Num() == 0)
+    {
+        return EReimportResult::Failed;
+    }
+
+    bool bCanceled = false;
+    UObject* Result = FactoryCreateFile(
+        Asset->GetClass(),
+        Asset->GetPackage(),
+        Asset->GetFName(),
+        Asset->GetFlags(),
+        Asset->AdditionalSourceFiles[0],
+        nullptr,
+        GWarn,
+        bCanceled);
+
+    if (bCanceled)
+    {
+        return EReimportResult::Cancelled;
+    }
+    if (!Result)
+    {
+        return EReimportResult::Failed;
+    }
+
+    Asset->MarkPackageDirty();
+    return EReimportResult::Succeeded;
+}
+
+int32 URigAxisSkeletonFactory::GetPriority() const
+{
+    return ImportPriority;
 }

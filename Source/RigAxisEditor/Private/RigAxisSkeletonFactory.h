@@ -1,11 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "EditorReimportHandler.h"
 #include "Factories/Factory.h"
 #include "RigAxisSkeletonFactory.generated.h"
 
 UCLASS()
-class URigAxisSkeletonFactory : public UFactory
+class URigAxisSkeletonFactory : public UFactory, public FReimportHandler
 {
     GENERATED_BODY()
 
@@ -21,4 +22,9 @@ public:
         const TCHAR* Parms,
         FFeedbackContext* Warn,
         bool& bOutOperationCanceled) override;
+
+    virtual bool CanReimport(UObject* Obj, TArray<FString>& OutFilenames) override;
+    virtual void SetReimportPaths(UObject* Obj, const TArray<FString>& NewReimportPaths) override;
+    virtual EReimportResult::Type Reimport(UObject* Obj) override;
+    virtual int32 GetPriority() const override;
 };
