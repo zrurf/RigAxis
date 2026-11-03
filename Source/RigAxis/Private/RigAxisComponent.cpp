@@ -168,9 +168,9 @@ FPrimitiveSceneProxy* URigAxisComponent::CreateSceneProxy()
     }
 
     TArray<UMaterialInterface*> Materials;
-    Materials.Reserve(PageMaterials.Num());
+    Materials.Reserve(SectionMaterials.Num());
     bool bHasMaterial = false;
-    for (const TObjectPtr<UMaterialInstanceDynamic>& Material : PageMaterials)
+    for (const TObjectPtr<UMaterialInstanceDynamic>& Material : SectionMaterials)
     {
         Materials.Add(Material);
         bHasMaterial |= Material != nullptr;
@@ -215,11 +215,15 @@ FBoxSphereBounds URigAxisComponent::CalcBounds(const FTransform& LocalToWorld) c
 
 int32 URigAxisComponent::GetNumMaterials() const
 {
-    return PageMaterials.Num();
+    return SectionMaterials.Num() > 0 ? SectionMaterials.Num() : PageMaterials.Num();
 }
 
 UMaterialInterface* URigAxisComponent::GetMaterial(int32 ElementIndex) const
 {
+    if (SectionMaterials.IsValidIndex(ElementIndex))
+    {
+        return SectionMaterials[ElementIndex];
+    }
     return PageMaterials.IsValidIndex(ElementIndex) ? PageMaterials[ElementIndex] : nullptr;
 }
 
@@ -227,6 +231,18 @@ void URigAxisComponent::GetUsedMaterials(
     TArray<UMaterialInterface*>& OutMaterials,
     bool bGetDebugMaterials) const
 {
+    if (SectionMaterials.Num() > 0)
+    {
+        for (const TObjectPtr<UMaterialInstanceDynamic>& Material : SectionMaterials)
+        {
+            if (Material)
+            {
+                OutMaterials.Add(Material);
+            }
+        }
+        return;
+    }
+
     for (const TObjectPtr<UMaterialInstanceDynamic>& Material : PageMaterials)
     {
         if (Material)
@@ -312,12 +328,18 @@ void URigAxisComponent::DestroyPlayer()
     Impl->AssetVersion = INDEX_NONE;
     Impl->BoundSectionCount = INDEX_NONE;
     PageMaterials.Reset();
+    SectionMaterials.Reset();
+    DarkMaterials.Reset();
+    DarkMaterialIndices.Reset();
+    BoundMaterialSignature = 0;
     MarkRenderStateDirty();
 }
 
 void URigAxisComponent::BuildPageMaterials()
 {
     PageMaterials.Reset();
+    DarkMaterials.Reset();
+    DarkMaterialIndices.Reset();
     if (!SkeletonAsset)
     {
         return;
@@ -355,6 +377,67 @@ void URigAxisComponent::BuildPageMaterials()
     }
 }
 
+void URigAxisComponent::RebuildSectionMaterials()
+{
+    SectionMaterials.Reset();
+    SectionMaterials.Reserve(Impl->Sections.Num());
+    for (const FRigAxisMeshSection& Section : Impl->Sections)
+    {
+        UMaterialInstanceDynamic* Material = nullptr;
+        const int32 Page = static_cast<int32>(Section.Page);
+        const int32 Blend = static_cast<int32>(Section.Blend);
+        if (Section.Dark.A <= KINDA_SMALL_NUMBER)
+        {
+            const int32 BaseIndex = Page * 4 + Blend;
+            if (PageMaterials.IsValidIndex(BaseIndex))
+            {
+                Material = PageMaterials[BaseIndex];
+            }
+        }
+        else
+        {
+            const uint64 Key = (static_cast<uint64>(Section.Page) << 40)
+                | (static_cast<uint64>(Blend) << 32)
+                | static_cast<uint64>(Section.Dark.ToFColor(true).ToPackedARGB());
+            if (const int32* Existing = DarkMaterialIndices.Find(Key))
+            {
+                if (DarkMaterials.IsValidIndex(*Existing))
+                {
+                    Material = DarkMaterials[*Existing];
+                }
+            }
+
+            if (!Material)
+            {
+                UMaterialInterface* Base = SelectBlendMaterial(
+                    MaterialSet,
+                    DefaultMaterials,
+                    MeshMaterial,
+                    Section.Blend);
+                if (Base)
+                {
+                    Material = UMaterialInstanceDynamic::Create(Base, this);
+                    if (SkeletonAsset
+                        && SkeletonAsset->AtlasPages.IsValidIndex(Page)
+                        && SkeletonAsset->AtlasPages[Page])
+                    {
+                        Material->SetTextureParameterValue(
+                            TEXT("SpriteTexture"),
+                            SkeletonAsset->AtlasPages[Page]);
+                    }
+                    if (SkeletonAsset && SkeletonAsset->bPremultipliedAlpha)
+                    {
+                        Material->SetScalarParameterValue(TEXT("UsePMA"), 1.0f);
+                    }
+                    Material->SetVectorParameterValue(TEXT("DarkColor"), Section.Dark);
+                    DarkMaterialIndices.Add(Key, DarkMaterials.Add(Material));
+                }
+            }
+        }
+        SectionMaterials.Add(Material);
+    }
+}
+
 void URigAxisComponent::UpdateMesh()
 {
     if (!Impl || !Impl->RenderData.IsValid())
@@ -388,7 +471,17 @@ void URigAxisComponent::UpdateMesh()
         Impl->SceneState->Normal = Normal;
     }
 
-    if (bMaterialsChanged || Impl->Sections.Num() != Impl->BoundSectionCount)
+    RebuildSectionMaterials();
+
+    uint32 Signature = GetTypeHash(Impl->Sections.Num());
+    for (const TObjectPtr<UMaterialInstanceDynamic>& Material : SectionMaterials)
+    {
+        Signature = HashCombine(Signature, GetTypeHash(Material.Get()));
+    }
+    const bool bSignatureChanged = Signature != BoundMaterialSignature;
+    BoundMaterialSignature = Signature;
+
+    if (bMaterialsChanged || bSignatureChanged || Impl->Sections.Num() != Impl->BoundSectionCount)
     {
         Impl->BoundSectionCount = Impl->Sections.Num();
         MarkRenderStateDirty();

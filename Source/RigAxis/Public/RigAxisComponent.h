@@ -148,12 +148,22 @@ private:
     void UpdateMesh();
     void DispatchEvents();
     void BuildPageMaterials();
+    void RebuildSectionMaterials();
 
     UPROPERTY(Transient)
     TArray<TObjectPtr<UMaterialInstanceDynamic>> PageMaterials;
 
     UPROPERTY(Transient)
+    TArray<TObjectPtr<UMaterialInstanceDynamic>> SectionMaterials;
+
+    UPROPERTY(Transient)
+    TArray<TObjectPtr<UMaterialInstanceDynamic>> DarkMaterials;
+
+    TMap<uint64, int32> DarkMaterialIndices;
+
+    UPROPERTY(Transient)
     FRigAxisMaterialSet DefaultMaterials;
 
+    uint32 BoundMaterialSignature = 0;
     FRigAxisComponentImpl* Impl = nullptr;
 };

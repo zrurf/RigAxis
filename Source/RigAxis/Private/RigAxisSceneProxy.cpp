@@ -38,17 +38,16 @@ namespace
         {
             FScopeLock Lock(&State->Lock);
 
-            for (const FRigAxisMeshSection& Section : State->Sections)
+            for (int32 SectionIndex = 0; SectionIndex < State->Sections.Num(); ++SectionIndex)
             {
+                const FRigAxisMeshSection& Section = State->Sections[SectionIndex];
                 if (Section.Positions.Num() == 0 || Section.Indices.Num() < 3)
                 {
                     continue;
                 }
 
-                const int32 MaterialIndex = static_cast<int32>(Section.Page) * 4
-                    + static_cast<int32>(Section.Blend);
-                const FMaterialRenderProxy* MaterialProxy = Materials.IsValidIndex(MaterialIndex)
-                    ? Materials[MaterialIndex]
+                const FMaterialRenderProxy* MaterialProxy = Materials.IsValidIndex(SectionIndex)
+                    ? Materials[SectionIndex]
                     : nullptr;
                 if (!MaterialProxy)
                 {

@@ -91,6 +91,7 @@ struct FRigAxisMeshSection
     uint32 Source = 0;
     uint32 Page = 0;
     ERigAxisBlend Blend = ERigAxisBlend::Normal;
+    FLinearColor Dark = FLinearColor(0.0f, 0.0f, 0.0f, 0.0f);
     TArray<FVector> Positions;
     TArray<FVector2D> UVs;
     TArray<FLinearColor> Colors;
