@@ -21,6 +21,7 @@ Source/ThirdParty/RigAxis/lib/**/*.a
 # Local test project plugin link
 Tests/RigAxisTest/Plugins/
 Tests/RigAxisTest/Config/DefaultInput.ini
+Tests/RigAxisTest/Build/
 
 # Local design notes
 dev-note/
