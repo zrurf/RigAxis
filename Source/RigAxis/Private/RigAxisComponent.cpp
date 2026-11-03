@@ -17,9 +17,11 @@ struct FRigAxisComponentImpl
     TUniquePtr<FRigAxisPlayer> Player;
     TUniquePtr<FRigAxisRenderData> RenderData;
     TArray<FRigAxisMeshSection> Sections;
+    TSharedPtr<FRigAxisSceneState, ESPMode::ThreadSafe> SceneState;
     TWeakObjectPtr<URigAxisSkeletonAsset> BoundAsset;
     TWeakObjectPtr<UMaterialInterface> BoundMaterial;
     int32 AssetVersion = INDEX_NONE;
+    int32 BoundSectionCount = INDEX_NONE;
 };
 
 URigAxisComponent::URigAxisComponent()
@@ -28,6 +30,7 @@ URigAxisComponent::URigAxisComponent()
     PrimaryComponentTick.TickGroup = TG_PrePhysics;
     bTickInEditor = false;
     Impl = new FRigAxisComponentImpl();
+    Impl->SceneState = MakeShared<FRigAxisSceneState, ESPMode::ThreadSafe>();
 
     SetCollisionEnabled(ECollisionEnabled::NoCollision);
     SetGenerateOverlapEvents(false);
@@ -127,7 +130,12 @@ FPrimitiveSceneProxy* URigAxisComponent::CreateSceneProxy()
     const FVector Normal = Plane == ERigAxisPlane::XZ
         ? FVector(0.0f, -1.0f, 0.0f)
         : FVector(0.0f, 0.0f, 1.0f);
-    return CreateRigAxisSceneProxy(this, Impl->Sections, Materials, Normal);
+    {
+        FScopeLock Lock(&Impl->SceneState->Lock);
+        Impl->SceneState->Sections = Impl->Sections;
+        Impl->SceneState->Normal = Normal;
+    }
+    return CreateRigAxisSceneProxy(this, Impl->SceneState.ToSharedRef(), Materials);
 }
 
 FBoxSphereBounds URigAxisComponent::CalcBounds(const FTransform& LocalToWorld) const
@@ -256,9 +264,14 @@ void URigAxisComponent::DestroyPlayer()
     Impl->Player.Reset();
     Impl->Data.Reset();
     Impl->Sections.Reset();
+    {
+        FScopeLock Lock(&Impl->SceneState->Lock);
+        Impl->SceneState->Sections.Reset();
+    }
     Impl->BoundAsset.Reset();
     Impl->BoundMaterial.Reset();
     Impl->AssetVersion = INDEX_NONE;
+    Impl->BoundSectionCount = INDEX_NONE;
     PageMaterials.Reset();
     MarkRenderStateDirty();
 }
@@ -290,7 +303,9 @@ void URigAxisComponent::UpdateMesh()
     }
 
     const int32 PageCount = SkeletonAsset ? SkeletonAsset->AtlasPages.Num() : 0;
-    if (Impl->BoundMaterial.Get() != MeshMaterial.Get() || PageMaterials.Num() != PageCount)
+    const bool bMaterialsChanged = Impl->BoundMaterial.Get() != MeshMaterial.Get()
+        || PageMaterials.Num() != PageCount;
+    if (bMaterialsChanged)
     {
         BuildPageMaterials();
         Impl->BoundMaterial = MeshMaterial;
@@ -304,7 +319,20 @@ void URigAxisComponent::UpdateMesh()
         bFlipY,
         Impl->Sections);
 
-    MarkRenderStateDirty();
+    const FVector Normal = Plane == ERigAxisPlane::XZ
+        ? FVector(0.0f, -1.0f, 0.0f)
+        : FVector(0.0f, 0.0f, 1.0f);
+    {
+        FScopeLock Lock(&Impl->SceneState->Lock);
+        Impl->SceneState->Sections = Impl->Sections;
+        Impl->SceneState->Normal = Normal;
+    }
+
+    if (bMaterialsChanged || Impl->Sections.Num() != Impl->BoundSectionCount)
+    {
+        Impl->BoundSectionCount = Impl->Sections.Num();
+        MarkRenderStateDirty();
+    }
     UpdateBounds();
 }
 

@@ -4,7 +4,6 @@
 #include "MaterialShared.h"
 #include "PrimitiveSceneProxy.h"
 #include "RigAxisComponent.h"
-#include "RigAxisTypes.h"
 
 namespace
 {
@@ -13,12 +12,10 @@ namespace
     public:
         FRigAxisSceneProxy(
             const URigAxisComponent* Component,
-            const TArray<FRigAxisMeshSection>& InSections,
-            const TArray<UMaterialInterface*>& InMaterials,
-            const FVector& InNormal)
+            const FRigAxisSceneStateRef& InState,
+            const TArray<UMaterialInterface*>& InMaterials)
             : FPrimitiveSceneProxy(Component)
-            , Sections(InSections)
-            , Normal(InNormal)
+            , State(InState)
             , MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetShaderPlatform()))
         {
             for (UMaterialInterface* Material : InMaterials)
@@ -39,7 +36,9 @@ namespace
             uint32 VisibilityMap,
             FMeshElementCollector& Collector) const override
         {
-            for (const FRigAxisMeshSection& Section : Sections)
+            FScopeLock Lock(&State->Lock);
+
+            for (const FRigAxisMeshSection& Section : State->Sections)
             {
                 if (Section.Positions.Num() == 0 || Section.Indices.Num() < 3)
                 {
@@ -77,7 +76,7 @@ namespace
                         FDynamicMeshVertex Vertex;
                         Vertex.Position = FVector3f(Section.Positions[Index]);
                         Vertex.TangentX = FVector3f(1.0f, 0.0f, 0.0f);
-                        Vertex.TangentZ = FVector3f(Normal);
+                        Vertex.TangentZ = FVector3f(State->Normal);
                         Vertex.TextureCoordinate[0] = Section.UVs.IsValidIndex(Index)
                             ? FVector2f(Section.UVs[Index])
                             : FVector2f::ZeroVector;
@@ -129,27 +128,20 @@ namespace
 
         virtual uint32 GetMemoryFootprint() const override
         {
-            return sizeof(*this) + static_cast<uint32>(GetAllocatedSize());
-        }
-
-        SIZE_T GetAllocatedSize() const
-        {
-            return Sections.GetAllocatedSize() + Materials.GetAllocatedSize();
+            return sizeof(*this) + static_cast<uint32>(Materials.GetAllocatedSize());
         }
 
     private:
-        TArray<FRigAxisMeshSection> Sections;
+        FRigAxisSceneStateRef State;
         TArray<FMaterialRenderProxy*> Materials;
-        FVector Normal;
         FMaterialRelevance MaterialRelevance;
     };
 }
 
 FPrimitiveSceneProxy* CreateRigAxisSceneProxy(
     const URigAxisComponent* Component,
-    const TArray<FRigAxisMeshSection>& Sections,
-    const TArray<UMaterialInterface*>& Materials,
-    const FVector& Normal)
+    const FRigAxisSceneStateRef& State,
+    const TArray<UMaterialInterface*>& Materials)
 {
-    return new FRigAxisSceneProxy(Component, Sections, Materials, Normal);
+    return new FRigAxisSceneProxy(Component, State, Materials);
 }
