@@ -133,4 +133,72 @@ bool FRigAxisImporterTest::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+    FRigAxisImportErrorTest,
+    "RigAxis.Editor.ImportErrors",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FRigAxisImportErrorTest::RunTest(const FString& Parameters)
+{
+    AddExpectedError(TEXT("RigAxis:"), EAutomationExpectedErrorFlags::Contains, 2);
+
+    const FString FixtureDir = FPaths::ConvertRelativePathToFull(
+        FPaths::Combine(FPaths::ProjectDir(), TEXT("../Fixtures")));
+    const FString WorkDir = FPaths::Combine(FPaths::ProjectSavedDir(), TEXT("RigAxisImportErrorTest"));
+    IFileManager::Get().DeleteDirectory(*WorkDir, false, true);
+    IFileManager::Get().MakeDirectory(*WorkDir, true);
+
+    auto WriteAtlas = [&WorkDir](const FString& Name, const FString& Page)
+    {
+        const FString Text = FString::Printf(
+            TEXT("%s\nsize: 64,64\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\nimage\n  bounds: 0,0,32,32\n"),
+            *Page);
+        FFileHelper::SaveStringToFile(Text, *FPaths::Combine(WorkDir, Name));
+    };
+
+    const FString MissingJson = FPaths::Combine(WorkDir, TEXT("missing.json"));
+    TArray<uint8> Bytes;
+    FFileHelper::LoadFileToArray(Bytes, *FPaths::Combine(FixtureDir, TEXT("hero.json")));
+    FFileHelper::SaveArrayToFile(Bytes, *MissingJson);
+    WriteAtlas(TEXT("missing.atlas"), TEXT("missing.png"));
+
+    const FString BrokenJson = FPaths::Combine(WorkDir, TEXT("broken.json"));
+    FFileHelper::SaveStringToFile(TEXT("{ invalid"), *BrokenJson);
+    WriteAtlas(TEXT("broken.atlas"), TEXT("broken.png"));
+
+    const FString Guid = FGuid::NewGuid().ToString(EGuidFormats::Digits).Left(8);
+    UPackage* Package = CreatePackage(
+        *FString::Printf(TEXT("/Game/RigAxisTest/ImporterErrorTest_%s"), *Guid));
+    URigAxisSkeletonFactory* Factory = NewObject<URigAxisSkeletonFactory>();
+
+    bool bCanceled = false;
+    UObject* Missing = Factory->FactoryCreateFile(
+        URigAxisSkeletonAsset::StaticClass(),
+        Package,
+        FName(TEXT("MissingPage")),
+        RF_Public | RF_Standalone,
+        MissingJson,
+        nullptr,
+        GWarn,
+        bCanceled);
+    TestNull(TEXT("missing atlas page"), Missing);
+
+    UObject* Broken = Factory->FactoryCreateFile(
+        URigAxisSkeletonAsset::StaticClass(),
+        Package,
+        FName(TEXT("BrokenSkeleton")),
+        RF_Public | RF_Standalone,
+        BrokenJson,
+        nullptr,
+        GWarn,
+        bCanceled);
+    TestNull(TEXT("invalid skeleton"), Broken);
+
+    Package->MarkAsGarbage();
+    IFileManager::Get().DeleteDirectory(*WorkDir, false, true);
+    CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+
+    return true;
+}
+
 #endif
