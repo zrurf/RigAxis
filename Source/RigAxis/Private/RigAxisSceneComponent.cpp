@@ -1,5 +1,6 @@
 #include "RigAxisSceneComponent.h"
 
+#include "Engine/Texture2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/Crc.h"
 #include "RigAxisLog.h"

@@ -3,7 +3,10 @@
 #include "Components/MeshComponent.h"
 #include "DynamicMeshBuilder.h"
 #include "MaterialShared.h"
+#include "Materials/MaterialInterface.h"
 #include "PrimitiveSceneProxy.h"
+#include "SceneInterface.h"
+#include "SceneManagement.h"
 
 namespace
 {
