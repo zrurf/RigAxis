@@ -9,10 +9,12 @@
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "ObjectTools.h"
+#include "RigAxisComponent.h"
 #include "RigAxisSkeletonAsset.h"
 #include "RigAxisSkeletonFactory.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FRigAxisImporterTest,
@@ -81,11 +83,23 @@ bool FRigAxisImporterTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("atlas pages"), Asset->AtlasPages.Num(), 1);
         TestTrue(TEXT("skeleton data"), Asset->GetData().IsValid());
 
+        TStrongObjectPtr<URigAxisComponent> Component(NewObject<URigAxisComponent>());
+        Component->SkeletonAsset = Asset;
+        TestTrue(TEXT("play before reimport"), Component->Play(TEXT("move")));
+        Component->Advance(0.5f);
+
+        FTransform Before;
+        TestTrue(TEXT("transform before reimport"), Component->GetBoneWorldTransform(TEXT("bone"), Before));
+        TestTrue(
+            TEXT("position before reimport"),
+            Before.GetLocation().Equals(FVector(5.0f, 0.0f, 0.0f), 0.01f));
+
         const int32 Version = Asset->GetVersion();
         FString JsonText;
         if (FFileHelper::LoadFileToString(JsonText, *JsonPath))
         {
             JsonText.ReplaceInline(TEXT("\"move\""), TEXT("\"walk\""));
+            JsonText.ReplaceInline(TEXT("\"x\": 10"), TEXT("\"x\": 20"));
             FFileHelper::SaveStringToFile(JsonText, *JsonPath);
         }
 
@@ -96,6 +110,16 @@ bool FRigAxisImporterTest::RunTest(const FString& Parameters)
             static_cast<int32>(EReimportResult::Succeeded));
         TestTrue(TEXT("version bumped"), Asset->GetVersion() > Version);
         TestTrue(TEXT("skeleton data after reimport"), Asset->GetData().IsValid());
+
+        Component->Advance(0.0f);
+        TestTrue(TEXT("play after reimport"), Component->Play(TEXT("walk")));
+        Component->Advance(0.5f);
+
+        FTransform After;
+        TestTrue(TEXT("transform after reimport"), Component->GetBoneWorldTransform(TEXT("bone"), After));
+        TestTrue(
+            TEXT("position after reimport"),
+            After.GetLocation().Equals(FVector(10.0f, 0.0f, 0.0f), 0.01f));
     }
 
     TArray<UTexture2D*> Pages;
