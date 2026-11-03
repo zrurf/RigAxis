@@ -76,6 +76,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
     TObjectPtr<UMaterialInterface> MeshMaterial;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
+    FRigAxisMaterialSet MaterialSet;
+
     UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
     FRigAxisAnimationDelegate OnAnimationStart;
 

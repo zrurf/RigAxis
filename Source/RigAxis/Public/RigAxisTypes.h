@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "RigAxisTypes.generated.h"
 
+class UMaterialInterface;
+
 UENUM(BlueprintType)
 enum class ERigAxisPlane : uint8
 {
@@ -64,6 +66,24 @@ struct FRigAxisAnimationEvent
 
     UPROPERTY(BlueprintReadOnly, Category = "RigAxis")
     float Balance = 0.0f;
+};
+
+USTRUCT(BlueprintType)
+struct FRigAxisMaterialSet
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
+    TObjectPtr<UMaterialInterface> Normal;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
+    TObjectPtr<UMaterialInterface> Additive;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
+    TObjectPtr<UMaterialInterface> Multiply;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
+    TObjectPtr<UMaterialInterface> Screen;
 };
 
 struct FRigAxisMeshSection

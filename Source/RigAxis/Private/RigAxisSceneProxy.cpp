@@ -45,14 +45,21 @@ namespace
                     continue;
                 }
 
-                const FMaterialRenderProxy* MaterialProxy = nullptr;
-                if (Materials.IsValidIndex(static_cast<int32>(Section.Page)))
+                const int32 MaterialIndex = static_cast<int32>(Section.Page) * 4
+                    + static_cast<int32>(Section.Blend);
+                const FMaterialRenderProxy* MaterialProxy = Materials.IsValidIndex(MaterialIndex)
+                    ? Materials[MaterialIndex]
+                    : nullptr;
+                if (!MaterialProxy)
                 {
-                    MaterialProxy = Materials[Section.Page];
-                }
-                else if (Materials.Num() > 0)
-                {
-                    MaterialProxy = Materials[0];
+                    for (FMaterialRenderProxy* Candidate : Materials)
+                    {
+                        if (Candidate)
+                        {
+                            MaterialProxy = Candidate;
+                            break;
+                        }
+                    }
                 }
 
                 if (!MaterialProxy)

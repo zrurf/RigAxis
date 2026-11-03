@@ -11,6 +11,33 @@
 #include "RigAxisSkeletonAsset.h"
 #include "RigAxisSkeletonData.h"
 
+namespace
+{
+    UMaterialInterface* SelectBlendMaterial(
+        const FRigAxisMaterialSet& Set,
+        UMaterialInterface* Fallback,
+        ERigAxisBlend Blend)
+    {
+        UMaterialInterface* Material = nullptr;
+        switch (Blend)
+        {
+        case ERigAxisBlend::Normal:
+            Material = Set.Normal;
+            break;
+        case ERigAxisBlend::Additive:
+            Material = Set.Additive;
+            break;
+        case ERigAxisBlend::Multiply:
+            Material = Set.Multiply;
+            break;
+        case ERigAxisBlend::Screen:
+            Material = Set.Screen;
+            break;
+        }
+        return Material ? Material : Fallback;
+    }
+}
+
 struct FRigAxisComponentImpl
 {
     TSharedPtr<FRigAxisSkeletonData> Data;
@@ -121,8 +148,14 @@ FPrimitiveSceneProxy* URigAxisComponent::CreateSceneProxy()
     }
 
     TArray<UMaterialInterface*> Materials;
-    GetUsedMaterials(Materials);
-    if (Materials.Num() == 0)
+    Materials.Reserve(PageMaterials.Num());
+    bool bHasMaterial = false;
+    for (const TObjectPtr<UMaterialInstanceDynamic>& Material : PageMaterials)
+    {
+        Materials.Add(Material);
+        bHasMaterial |= Material != nullptr;
+    }
+    if (!bHasMaterial)
     {
         return nullptr;
     }
@@ -162,38 +195,24 @@ FBoxSphereBounds URigAxisComponent::CalcBounds(const FTransform& LocalToWorld) c
 
 int32 URigAxisComponent::GetNumMaterials() const
 {
-    if (PageMaterials.Num() > 0)
-    {
-        return PageMaterials.Num();
-    }
-    return MeshMaterial ? 1 : 0;
+    return PageMaterials.Num();
 }
 
 UMaterialInterface* URigAxisComponent::GetMaterial(int32 ElementIndex) const
 {
-    if (PageMaterials.IsValidIndex(ElementIndex))
-    {
-        return PageMaterials[ElementIndex];
-    }
-    return ElementIndex == 0 ? MeshMaterial : nullptr;
+    return PageMaterials.IsValidIndex(ElementIndex) ? PageMaterials[ElementIndex] : nullptr;
 }
 
 void URigAxisComponent::GetUsedMaterials(
     TArray<UMaterialInterface*>& OutMaterials,
     bool bGetDebugMaterials) const
 {
-    if (PageMaterials.Num() > 0)
+    for (const TObjectPtr<UMaterialInstanceDynamic>& Material : PageMaterials)
     {
-        for (const TObjectPtr<UMaterialInstanceDynamic>& Material : PageMaterials)
+        if (Material)
         {
             OutMaterials.Add(Material);
         }
-        return;
-    }
-
-    if (MeshMaterial)
-    {
-        OutMaterials.Add(MeshMaterial);
     }
 }
 
@@ -279,19 +298,32 @@ void URigAxisComponent::DestroyPlayer()
 void URigAxisComponent::BuildPageMaterials()
 {
     PageMaterials.Reset();
-    if (!SkeletonAsset || !MeshMaterial)
+    if (!SkeletonAsset)
     {
         return;
     }
 
-    for (const TObjectPtr<UTexture2D>& Texture : SkeletonAsset->AtlasPages)
+    const int32 PageCount = SkeletonAsset->AtlasPages.Num();
+    PageMaterials.Reserve(PageCount * 4);
+    for (int32 Page = 0; Page < PageCount; ++Page)
     {
-        UMaterialInstanceDynamic* Instance = UMaterialInstanceDynamic::Create(MeshMaterial, this);
-        if (Texture)
+        for (int32 Blend = 0; Blend < 4; ++Blend)
         {
-            Instance->SetTextureParameterValue(TEXT("SpriteTexture"), Texture);
+            UMaterialInterface* Base = SelectBlendMaterial(
+                MaterialSet,
+                MeshMaterial,
+                static_cast<ERigAxisBlend>(Blend));
+            UMaterialInstanceDynamic* Instance = Base
+                ? UMaterialInstanceDynamic::Create(Base, this)
+                : nullptr;
+            if (Instance && SkeletonAsset->AtlasPages[Page])
+            {
+                Instance->SetTextureParameterValue(
+                    TEXT("SpriteTexture"),
+                    SkeletonAsset->AtlasPages[Page]);
+            }
+            PageMaterials.Add(Instance);
         }
-        PageMaterials.Add(Instance);
     }
 }
 
@@ -304,7 +336,7 @@ void URigAxisComponent::UpdateMesh()
 
     const int32 PageCount = SkeletonAsset ? SkeletonAsset->AtlasPages.Num() : 0;
     const bool bMaterialsChanged = Impl->BoundMaterial.Get() != MeshMaterial.Get()
-        || PageMaterials.Num() != PageCount;
+        || PageMaterials.Num() != PageCount * 4;
     if (bMaterialsChanged)
     {
         BuildPageMaterials();
