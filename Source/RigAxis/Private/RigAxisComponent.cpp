@@ -10,31 +10,38 @@
 #include "RigAxisSceneProxy.h"
 #include "RigAxisSkeletonAsset.h"
 #include "RigAxisSkeletonData.h"
+#include "UObject/ConstructorHelpers.h"
 
 namespace
 {
     UMaterialInterface* SelectBlendMaterial(
         const FRigAxisMaterialSet& Set,
+        const FRigAxisMaterialSet& Defaults,
         UMaterialInterface* Fallback,
         ERigAxisBlend Blend)
     {
         UMaterialInterface* Material = nullptr;
+        UMaterialInterface* Default = nullptr;
         switch (Blend)
         {
         case ERigAxisBlend::Normal:
             Material = Set.Normal;
+            Default = Defaults.Normal;
             break;
         case ERigAxisBlend::Additive:
             Material = Set.Additive;
+            Default = Defaults.Additive;
             break;
         case ERigAxisBlend::Multiply:
             Material = Set.Multiply;
+            Default = Defaults.Multiply;
             break;
         case ERigAxisBlend::Screen:
             Material = Set.Screen;
+            Default = Defaults.Screen;
             break;
         }
-        return Material ? Material : Fallback;
+        return Material ? Material : (Fallback ? Fallback : Default);
     }
 }
 
@@ -63,6 +70,19 @@ URigAxisComponent::URigAxisComponent()
     SetGenerateOverlapEvents(false);
     SetCastShadow(false);
     SetMobility(EComponentMobility::Movable);
+
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> NormalMaterial(
+        TEXT("/RigAxis/Materials/M_RigAxisNormal"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> AdditiveMaterial(
+        TEXT("/RigAxis/Materials/M_RigAxisAdditive"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> MultiplyMaterial(
+        TEXT("/RigAxis/Materials/M_RigAxisMultiply"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> ScreenMaterial(
+        TEXT("/RigAxis/Materials/M_RigAxisScreen"));
+    DefaultMaterials.Normal = NormalMaterial.Object;
+    DefaultMaterials.Additive = AdditiveMaterial.Object;
+    DefaultMaterials.Multiply = MultiplyMaterial.Object;
+    DefaultMaterials.Screen = ScreenMaterial.Object;
 }
 
 URigAxisComponent::~URigAxisComponent()
@@ -311,16 +331,24 @@ void URigAxisComponent::BuildPageMaterials()
         {
             UMaterialInterface* Base = SelectBlendMaterial(
                 MaterialSet,
+                DefaultMaterials,
                 MeshMaterial,
                 static_cast<ERigAxisBlend>(Blend));
             UMaterialInstanceDynamic* Instance = Base
                 ? UMaterialInstanceDynamic::Create(Base, this)
                 : nullptr;
-            if (Instance && SkeletonAsset->AtlasPages[Page])
+            if (Instance)
             {
-                Instance->SetTextureParameterValue(
-                    TEXT("SpriteTexture"),
-                    SkeletonAsset->AtlasPages[Page]);
+                if (SkeletonAsset->AtlasPages[Page])
+                {
+                    Instance->SetTextureParameterValue(
+                        TEXT("SpriteTexture"),
+                        SkeletonAsset->AtlasPages[Page]);
+                }
+                if (SkeletonAsset->bPremultipliedAlpha)
+                {
+                    Instance->SetScalarParameterValue(TEXT("UsePMA"), 1.0f);
+                }
             }
             PageMaterials.Add(Instance);
         }

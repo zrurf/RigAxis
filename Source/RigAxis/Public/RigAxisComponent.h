@@ -152,5 +152,8 @@ private:
     UPROPERTY(Transient)
     TArray<TObjectPtr<UMaterialInstanceDynamic>> PageMaterials;
 
+    UPROPERTY(Transient)
+    FRigAxisMaterialSet DefaultMaterials;
+
     FRigAxisComponentImpl* Impl = nullptr;
 };
