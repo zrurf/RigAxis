@@ -13,7 +13,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::slice;
 
-use rigby_runtime::{load_skeleton, Atlas, RegionLookup, SkeletonData};
+use rigby_runtime::{load_skeleton, AnimationState, Atlas, Pose, RegionLookup, SkeletonData};
 
 pub const RIGAXIS_ABI_VERSION: u32 = 1;
 const VERSION: &[u8] = b"0.1.0\0";
@@ -80,6 +80,24 @@ pub struct RigAxisLookup {
     missing: Vec<CString>,
 }
 
+#[repr(C)]
+pub struct RigAxisAffine {
+    pub a: f64,
+    pub b: f64,
+    pub c: f64,
+    pub d: f64,
+    pub tx: f64,
+    pub ty: f64,
+}
+
+pub struct RigAxisPose {
+    pose: Pose,
+}
+
+pub struct RigAxisState {
+    state: AnimationState,
+}
+
 fn skeleton_ref<'a>(skeleton: *const RigAxisSkeleton) -> Option<&'a RigAxisSkeleton> {
     if skeleton.is_null() {
         None
@@ -101,6 +119,22 @@ fn lookup_ref<'a>(lookup: *const RigAxisLookup) -> Option<&'a RigAxisLookup> {
         None
     } else {
         Some(unsafe { &*lookup })
+    }
+}
+
+fn pose_ref<'a>(pose: *const RigAxisPose) -> Option<&'a RigAxisPose> {
+    if pose.is_null() {
+        None
+    } else {
+        Some(unsafe { &*pose })
+    }
+}
+
+fn state_ref<'a>(state: *const RigAxisState) -> Option<&'a RigAxisState> {
+    if state.is_null() {
+        None
+    } else {
+        Some(unsafe { &*state })
     }
 }
 
@@ -406,6 +440,367 @@ pub unsafe extern "C" fn rigaxis_lookup_missing_at(
     lookup_ref(lookup).map_or(ptr::null(), |lookup| name_at(&lookup.missing, index))
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_create(
+    skeleton: *const RigAxisSkeleton,
+    out: *mut *mut RigAxisPose,
+) -> RigAxisStatus {
+    clear_error();
+    if skeleton.is_null() || out.is_null() {
+        set_error("invalid argument");
+        return RigAxisStatus::InvalidArgument;
+    }
+    unsafe {
+        *out = ptr::null_mut();
+    }
+
+    guard(|| {
+        let skeleton = unsafe { &*skeleton };
+        let pose = Pose::new(&skeleton.data);
+        unsafe {
+            *out = Box::into_raw(Box::new(RigAxisPose { pose }));
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_free(pose: *mut RigAxisPose) {
+    if !pose.is_null() {
+        unsafe {
+            drop(Box::from_raw(pose));
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_reset(
+    skeleton: *const RigAxisSkeleton,
+    pose: *mut RigAxisPose,
+) {
+    if skeleton.is_null() || pose.is_null() {
+        return;
+    }
+    let skeleton = unsafe { &*skeleton };
+    let pose = unsafe { &mut *pose };
+    pose.pose.reset(&skeleton.data);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_update_world(
+    skeleton: *const RigAxisSkeleton,
+    pose: *mut RigAxisPose,
+) {
+    if skeleton.is_null() || pose.is_null() {
+        return;
+    }
+    let skeleton = unsafe { &*skeleton };
+    let pose = unsafe { &mut *pose };
+    pose.pose.update_world(&skeleton.data);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_reset_physics(pose: *mut RigAxisPose) {
+    if pose.is_null() {
+        return;
+    }
+    let pose = unsafe { &mut *pose };
+    pose.pose.reset_physics();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_set_skin(
+    skeleton: *const RigAxisSkeleton,
+    pose: *mut RigAxisPose,
+    name: *const c_char,
+) -> bool {
+    if skeleton.is_null() || pose.is_null() || name.is_null() {
+        return false;
+    }
+    let Ok(name) = (unsafe { CStr::from_ptr(name) }).to_str() else {
+        return false;
+    };
+    let skeleton = unsafe { &*skeleton };
+    let pose = unsafe { &mut *pose };
+    let Some(skin) = skeleton.data.find_skin(name) else {
+        return false;
+    };
+    pose.pose.skin = Some(skin);
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_pose_bone_world(
+    pose: *const RigAxisPose,
+    bone: u32,
+    out: *mut RigAxisAffine,
+) -> bool {
+    let Some(pose) = pose_ref(pose) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let Some(world) = pose.pose.world.get(bone as usize) else {
+        return false;
+    };
+    unsafe {
+        *out = RigAxisAffine {
+            a: world.a,
+            b: world.b,
+            c: world.c,
+            d: world.d,
+            tx: world.tx,
+            ty: world.ty,
+        };
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_create(out: *mut *mut RigAxisState) -> RigAxisStatus {
+    clear_error();
+    if out.is_null() {
+        set_error("invalid argument");
+        return RigAxisStatus::InvalidArgument;
+    }
+    unsafe {
+        *out = ptr::null_mut();
+    }
+
+    guard(|| {
+        let state = AnimationState::new();
+        unsafe {
+            *out = Box::into_raw(Box::new(RigAxisState { state }));
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_free(state: *mut RigAxisState) {
+    if !state.is_null() {
+        unsafe {
+            drop(Box::from_raw(state));
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_set_speed(state: *mut RigAxisState, speed: f64) {
+    if state.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state };
+    state.state.speed = speed;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_get_speed(state: *const RigAxisState) -> f64 {
+    state_ref(state).map_or(0.0, |state| state.state.speed)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_play(
+    state: *mut RigAxisState,
+    skeleton: *const RigAxisSkeleton,
+    name: *const c_char,
+    looping: bool,
+    mix: f64,
+    out_entry: *mut u64,
+) -> bool {
+    if state.is_null() || skeleton.is_null() || name.is_null() {
+        return false;
+    }
+    let Ok(name) = (unsafe { CStr::from_ptr(name) }).to_str() else {
+        return false;
+    };
+    let state = unsafe { &mut *state };
+    let skeleton = unsafe { &*skeleton };
+
+    if !state.state.play(&skeleton.data, name, looping, mix) {
+        return false;
+    }
+    if !out_entry.is_null() {
+        if let Some(entry) = state.state.current(0) {
+            unsafe {
+                *out_entry = entry.id;
+            }
+        }
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_set_animation(
+    state: *mut RigAxisState,
+    skeleton: *const RigAxisSkeleton,
+    track: u32,
+    name: *const c_char,
+    looping: bool,
+    mix: f64,
+    out_entry: *mut u64,
+) -> bool {
+    if state.is_null() || skeleton.is_null() || name.is_null() {
+        return false;
+    }
+    let Ok(name) = (unsafe { CStr::from_ptr(name) }).to_str() else {
+        return false;
+    };
+    let state = unsafe { &mut *state };
+    let skeleton = unsafe { &*skeleton };
+
+    let Some(entry) = state
+        .state
+        .set_animation(&skeleton.data, track as usize, name, looping, mix)
+    else {
+        return false;
+    };
+    if !out_entry.is_null() {
+        unsafe {
+            *out_entry = entry;
+        }
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_add_animation(
+    state: *mut RigAxisState,
+    skeleton: *const RigAxisSkeleton,
+    track: u32,
+    name: *const c_char,
+    looping: bool,
+    mix: f64,
+    delay: f64,
+    has_delay: bool,
+    out_entry: *mut u64,
+) -> bool {
+    if state.is_null() || skeleton.is_null() || name.is_null() {
+        return false;
+    }
+    let Ok(name) = (unsafe { CStr::from_ptr(name) }).to_str() else {
+        return false;
+    };
+    let state = unsafe { &mut *state };
+    let skeleton = unsafe { &*skeleton };
+    let delay = if has_delay { Some(delay) } else { None };
+
+    let Some(entry) =
+        state
+            .state
+            .add_animation(&skeleton.data, track as usize, name, looping, mix, delay)
+    else {
+        return false;
+    };
+    if !out_entry.is_null() {
+        unsafe {
+            *out_entry = entry;
+        }
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_clear_track(state: *mut RigAxisState, track: u32) {
+    if state.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state };
+    state.state.clear_track(track as usize);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_stop(state: *mut RigAxisState) {
+    if state.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state };
+    state.state.stop();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_set_track_alpha(
+    state: *mut RigAxisState,
+    track: u32,
+    alpha: f64,
+) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    let state = unsafe { &mut *state };
+    let Some(entry) = state.state.current_mut(track as usize) else {
+        return false;
+    };
+    entry.alpha = alpha;
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_set_track_time_scale(
+    state: *mut RigAxisState,
+    track: u32,
+    scale: f64,
+) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    let state = unsafe { &mut *state };
+    let Some(entry) = state.state.current_mut(track as usize) else {
+        return false;
+    };
+    entry.time_scale = scale;
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_set_track_time(
+    state: *mut RigAxisState,
+    track: u32,
+    time: f64,
+) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    let state = unsafe { &mut *state };
+    let Some(entry) = state.state.current_mut(track as usize) else {
+        return false;
+    };
+    entry.time = time;
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_update(
+    state: *mut RigAxisState,
+    skeleton: *const RigAxisSkeleton,
+    delta_seconds: f64,
+) {
+    if state.is_null() || skeleton.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state };
+    let skeleton = unsafe { &*skeleton };
+    state.state.update(&skeleton.data, delta_seconds);
+    // Events are exposed by a later milestone.
+    state.state.drain_events();
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_apply(
+    state: *mut RigAxisState,
+    skeleton: *const RigAxisSkeleton,
+    pose: *mut RigAxisPose,
+) {
+    if state.is_null() || skeleton.is_null() || pose.is_null() {
+        return;
+    }
+    let state = unsafe { &mut *state };
+    let skeleton = unsafe { &*skeleton };
+    let pose = unsafe { &mut *pose };
+    state.state.apply(&skeleton.data, &mut pose.pose);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,6 +809,37 @@ mod tests {
     const SKELETON: &str = r#"{"skeleton":{"spine":"4.3"},"bones":[{"name":"root"},{"name":"child","parent":"root","x":10}],"slots":[],"skins":[],"animations":{}}"#;
     const ATLAS: &str =
         "minimal.png\nsize: 64,64\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\n";
+    const ANIMATED_SKELETON: &str = r#"{
+      "skeleton": {"spine": "4.3"},
+      "bones": [
+        {"name": "root"},
+        {"name": "child", "parent": "root", "x": 10}
+      ],
+      "slots": [],
+      "skins": [],
+      "animations": {
+        "move": {
+          "bones": {
+            "child": {
+              "translate": [
+                {"time": 0, "x": 0, "y": 0},
+                {"time": 1, "x": 10, "y": 0}
+              ]
+            }
+          }
+        },
+        "move2": {
+          "bones": {
+            "child": {
+              "translate": [
+                {"time": 0, "x": 0, "y": 0},
+                {"time": 1, "x": 100, "y": 0}
+              ]
+            }
+          }
+        }
+      }
+    }"#;
 
     #[test]
     fn loads_skeleton_and_atlas() {
@@ -464,6 +890,149 @@ mod tests {
             assert!(skeleton.is_null());
             let error = CStr::from_ptr(rigaxis_last_error()).to_str().unwrap();
             assert!(!error.is_empty());
+        }
+    }
+
+    #[test]
+    fn plays_animation_and_poses() {
+        unsafe {
+            let mut skeleton: *mut RigAxisSkeleton = ptr::null_mut();
+            let status = rigaxis_skeleton_create(
+                ANIMATED_SKELETON.as_ptr(),
+                ANIMATED_SKELETON.len(),
+                &mut skeleton,
+            );
+            assert_eq!(status as i32, RigAxisStatus::Ok as i32);
+
+            let mut pose: *mut RigAxisPose = ptr::null_mut();
+            assert_eq!(
+                rigaxis_pose_create(skeleton, &mut pose) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut state: *mut RigAxisState = ptr::null_mut();
+            assert_eq!(
+                rigaxis_state_create(&mut state) as i32,
+                RigAxisStatus::Ok as i32
+            );
+
+            let name = CString::new("move").unwrap();
+            assert!(rigaxis_state_play(
+                state,
+                skeleton,
+                name.as_ptr(),
+                false,
+                0.0,
+                ptr::null_mut()
+            ));
+            rigaxis_state_update(state, skeleton, 0.5);
+            rigaxis_state_apply(state, skeleton, pose);
+
+            let mut affine = RigAxisAffine {
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+                tx: 0.0,
+                ty: 0.0,
+            };
+            assert!(rigaxis_pose_bone_world(pose, 1, &mut affine));
+            assert!((affine.tx - 15.0).abs() < 1e-9);
+            assert!(affine.ty.abs() < 1e-9);
+            assert!((affine.a - 1.0).abs() < 1e-9);
+            assert!(affine.b.abs() < 1e-9);
+            assert!(affine.c.abs() < 1e-9);
+            assert!((affine.d - 1.0).abs() < 1e-9);
+
+            rigaxis_state_free(state);
+            rigaxis_pose_free(pose);
+            rigaxis_skeleton_free(skeleton);
+        }
+    }
+
+    #[test]
+    fn crossfades_and_queues() {
+        unsafe {
+            let mut skeleton: *mut RigAxisSkeleton = ptr::null_mut();
+            let status = rigaxis_skeleton_create(
+                ANIMATED_SKELETON.as_ptr(),
+                ANIMATED_SKELETON.len(),
+                &mut skeleton,
+            );
+            assert_eq!(status as i32, RigAxisStatus::Ok as i32);
+
+            let mut pose: *mut RigAxisPose = ptr::null_mut();
+            assert_eq!(
+                rigaxis_pose_create(skeleton, &mut pose) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut state: *mut RigAxisState = ptr::null_mut();
+            assert_eq!(
+                rigaxis_state_create(&mut state) as i32,
+                RigAxisStatus::Ok as i32
+            );
+
+            let move_name = CString::new("move").unwrap();
+            let move2_name = CString::new("move2").unwrap();
+            let mut affine = RigAxisAffine {
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+                tx: 0.0,
+                ty: 0.0,
+            };
+
+            assert!(rigaxis_state_play(
+                state,
+                skeleton,
+                move_name.as_ptr(),
+                false,
+                0.0,
+                ptr::null_mut()
+            ));
+            rigaxis_state_update(state, skeleton, 0.25);
+            assert!(rigaxis_state_set_animation(
+                state,
+                skeleton,
+                0,
+                move2_name.as_ptr(),
+                false,
+                0.5,
+                ptr::null_mut()
+            ));
+            rigaxis_state_update(state, skeleton, 0.1);
+            rigaxis_state_apply(state, skeleton, pose);
+            assert!(rigaxis_pose_bone_world(pose, 1, &mut affine));
+            assert!((affine.tx - 14.8).abs() < 1e-9);
+
+            rigaxis_state_stop(state);
+            assert!(rigaxis_state_play(
+                state,
+                skeleton,
+                move_name.as_ptr(),
+                false,
+                0.0,
+                ptr::null_mut()
+            ));
+            assert!(rigaxis_state_add_animation(
+                state,
+                skeleton,
+                0,
+                move2_name.as_ptr(),
+                false,
+                0.0,
+                0.0,
+                false,
+                ptr::null_mut()
+            ));
+            rigaxis_state_update(state, skeleton, 1.1);
+            rigaxis_state_apply(state, skeleton, pose);
+            assert!(rigaxis_pose_bone_world(pose, 1, &mut affine));
+            assert!((affine.tx - 20.0).abs() < 1e-9);
+
+            rigaxis_state_free(state);
+            rigaxis_pose_free(pose);
+            rigaxis_skeleton_free(skeleton);
         }
     }
 }
