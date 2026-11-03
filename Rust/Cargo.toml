@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "rigby-ffi",
+    "vendor/rigby2d/runtimes/rust/rigby-runtime",
+]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["jaisurya-dev-art"]
+repository = "https://github.com/jaisurya-dev-art/rigby2d"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+strip = "debuginfo"

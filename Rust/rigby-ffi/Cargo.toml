@@ -1,0 +1,12 @@
+[package]
+name = "rigaxis-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "rigaxis_ffi"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+rigby-runtime = { path = "../vendor/rigby2d/runtimes/rust/rigby-runtime" }

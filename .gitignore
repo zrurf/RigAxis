@@ -14,6 +14,10 @@ Saved/
 # Rust build output
 Rust/target/
 
+# Locally built native libraries
+Source/ThirdParty/RigAxis/lib/**/*.lib
+Source/ThirdParty/RigAxis/lib/**/*.a
+
 # Local test project plugin link
 Tests/RigAxisTest/Plugins/
 Tests/RigAxisTest/Config/DefaultInput.ini

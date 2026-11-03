@@ -2,14 +2,24 @@
 
 ## Rigby2D runtime
 
-RigAxis is designed to bundle the Rigby2D Rust runtime.
+RigAxis bundles the Rigby2D Rust runtime.
 
 - Project: https://github.com/jaisurya-dev-art/rigby2d
-- Runtime path: `runtimes/rust/rigby-runtime`
+- Commit: `13295900f890ca960174b9403f782e69623e028b`
+- Vendored path: `Rust/vendor/rigby2d/runtimes/rust/rigby-runtime`
 - License: MIT OR Apache-2.0
-- Copyright: the Rigby2D project and contributors.
+- Copyright (c) 2026 jaisurya-dev-art
 
-The full upstream license texts will be included with the vendored source under `Rust/vendor/rigby2d/` when the native layer is added.
+The full license texts are included at:
+
+- `Rust/vendor/rigby2d/LICENSE-MIT`
+- `Rust/vendor/rigby2d/LICENSE-APACHE`
+
+The native static libraries are built from this source and the RigAxis FFI crate. They are generated locally and are not committed.
+
+## RigAxis FFI
+
+`Rust/rigby-ffi` is part of RigAxis and is licensed under the Apache License 2.0.
 
 ## Trademarks
 
