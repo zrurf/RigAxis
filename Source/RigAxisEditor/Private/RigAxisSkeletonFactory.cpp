@@ -135,6 +135,15 @@ namespace
     }
 }
 
+bool URigAxisSkeletonFactory::FactoryCanImport(const FString& Filename)
+{
+    if (Filename.EndsWith(TEXT(".scene.json"), ESearchCase::IgnoreCase))
+    {
+        return false;
+    }
+    return Super::FactoryCanImport(Filename);
+}
+
 URigAxisSkeletonFactory::URigAxisSkeletonFactory()
 {
     bCreateNew = false;

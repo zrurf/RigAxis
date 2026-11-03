@@ -1,0 +1,24 @@
+{
+  "skeleton": {"spine": "4.3"},
+  "bones": [
+    {"name": "root"},
+    {"name": "camera", "parent": "root"},
+    {"name": "hero", "parent": "root"}
+  ],
+  "slots": [
+    {"name": "hero", "bone": "hero"}
+  ],
+  "skins": [],
+  "animations": {
+    "shot": {
+      "bones": {
+        "camera": {
+          "translate": [
+            {"time": 0, "x": 0, "y": 0},
+            {"time": 1, "x": 10, "y": 0}
+          ]
+        }
+      }
+    }
+  }
+}

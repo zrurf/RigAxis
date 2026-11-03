@@ -19,7 +19,8 @@ public class RigAxisEditor : ModuleRules
             "UnrealEd",
             "AssetTools",
             "AssetRegistry",
-            "ImageWrapper"
+            "ImageWrapper",
+            "Json"
         });
     }
 }

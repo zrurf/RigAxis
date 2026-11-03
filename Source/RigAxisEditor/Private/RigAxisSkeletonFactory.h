@@ -13,6 +13,8 @@ class URigAxisSkeletonFactory : public UFactory, public FReimportHandler
 public:
     URigAxisSkeletonFactory();
 
+    virtual bool FactoryCanImport(const FString& Filename) override;
+
     virtual UObject* FactoryCreateFile(
         UClass* InClass,
         UObject* InParent,

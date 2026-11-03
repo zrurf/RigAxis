@@ -1,0 +1,14 @@
+{
+  "rigbyScene": 1.0,
+  "stage": "stage.json",
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Hero",
+      "bone": "hero",
+      "slot": "hero",
+      "skeleton": "hero.json",
+      "clips": {"shot": [{"animation": "move"}]}
+    }
+  ]
+}
