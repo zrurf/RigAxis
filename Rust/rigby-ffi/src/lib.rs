@@ -1383,17 +1383,25 @@ pub unsafe extern "C" fn rigaxis_scene_play(scene: *mut RigAxisScene, shot: *con
         set_error("shot name is not UTF-8");
         return;
     };
-    if let Some(scene) = scene_mut(scene) {
+    guard(|| {
+        let Some(scene) = scene_mut(scene) else {
+            return Err("invalid scene".to_string());
+        };
         scene.player.play(name, looping);
         scene.current_shot = c_string(scene.player.shot.as_deref().unwrap_or(""));
-    }
+        Ok(())
+    });
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_scene_update(scene: *mut RigAxisScene, delta_seconds: f64) {
-    if let Some(scene) = scene_mut(scene) {
+    guard(|| {
+        let Some(scene) = scene_mut(scene) else {
+            return Err("invalid scene".to_string());
+        };
         scene.player.update(delta_seconds.max(0.0));
-    }
+        Ok(())
+    });
 }
 
 #[no_mangle]
@@ -1402,10 +1410,14 @@ pub unsafe extern "C" fn rigaxis_scene_set_time(
     time: f64,
     physics_delta: f64,
 ) {
-    if let Some(scene) = scene_mut(scene) {
+    guard(|| {
+        let Some(scene) = scene_mut(scene) else {
+            return Err("invalid scene".to_string());
+        };
         scene.player.time = time.max(0.0);
         scene.player.evaluate(physics_delta.max(0.0));
-    }
+        Ok(())
+    });
 }
 
 #[no_mangle]
@@ -1520,57 +1532,59 @@ pub unsafe extern "C" fn rigaxis_scene_camera_world(
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_scene_build_render(scene: *mut RigAxisScene, render: *mut RigAxisRender) {
     clear_error();
-    let Some(scene) = scene_mut(scene) else {
-        set_error("invalid scene");
-        return;
-    };
-    let Some(render) = render_mut(render) else {
-        set_error("invalid render");
-        return;
-    };
+    guard(|| {
+        let Some(scene) = scene_mut(scene) else {
+            return Err("invalid scene".to_string());
+        };
+        let Some(render) = render_mut(render) else {
+            return Err("invalid render".to_string());
+        };
 
-    render.output.clear();
-    let layers = scene.player.draw_list();
-    let mut index = 0;
-    while index < layers.len() {
-        if layers[index].actor.is_none() {
-            let start = index;
-            while index < layers.len() && layers[index].actor.is_none() {
+        render.output.clear();
+        let layers = scene.player.draw_list();
+        let mut index = 0;
+        while index < layers.len() {
+            if layers[index].actor.is_none() {
+                let start = index;
+                while index < layers.len() && layers[index].actor.is_none() {
+                    index += 1;
+                }
+                let slots: Vec<usize> =
+                    layers[start..index].iter().map(|layer| layer.slot).collect();
+                render.output.append(
+                    &scene.player.stage,
+                    &scene.player.pose,
+                    &scene.stage_lookup,
+                    [1.0; 4],
+                    &slots,
+                    0,
+                );
+            } else {
+                let layer = layers[index];
+                if let Some(character) = scene.player.character(layer.actor.unwrap()) {
+                    if let Some(character_index) = scene
+                        .player
+                        .characters
+                        .iter()
+                        .position(|candidate| candidate.id == character.id)
+                    {
+                        let slots = character.pose.draw_order.clone();
+                        render.output.append(
+                            &character.data,
+                            &character.pose,
+                            &scene.character_lookups[character_index],
+                            layer.tint,
+                            &slots,
+                            character_index + 1,
+                        );
+                    }
+                }
                 index += 1;
             }
-            let slots: Vec<usize> = layers[start..index].iter().map(|layer| layer.slot).collect();
-            render.output.append(
-                &scene.player.stage,
-                &scene.player.pose,
-                &scene.stage_lookup,
-                [1.0; 4],
-                &slots,
-                0,
-            );
-        } else {
-            let layer = layers[index];
-            if let Some(character) = scene.player.character(layer.actor.unwrap()) {
-                if let Some(character_index) = scene
-                    .player
-                    .characters
-                    .iter()
-                    .position(|candidate| candidate.id == character.id)
-                {
-                    let slots = character.pose.draw_order.clone();
-                    render.output.append(
-                        &character.data,
-                        &character.pose,
-                        &scene.character_lookups[character_index],
-                        layer.tint,
-                        &slots,
-                        character_index + 1,
-                    );
-                }
-            }
-            index += 1;
         }
-    }
-    update_batch_views(render);
+        update_batch_views(render);
+        Ok(())
+    });
 }
 
 #[cfg(test)]
