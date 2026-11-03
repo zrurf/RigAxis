@@ -5,9 +5,9 @@
 #include "RigAxisTypes.h"
 #include "RigAxisComponent.generated.h"
 
+class FPrimitiveSceneProxy;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
-class UProceduralMeshComponent;
 class URigAxisSkeletonAsset;
 class URigAxisComponent;
 struct FRigAxisComponentImpl;
@@ -128,16 +128,20 @@ public:
         ELevelTick TickType,
         FActorComponentTickFunction* ThisTickFunction) override;
 
+    virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
+    virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+    virtual int32 GetNumMaterials() const override;
+    virtual UMaterialInterface* GetMaterial(int32 ElementIndex) const override;
+    virtual void GetUsedMaterials(
+        TArray<UMaterialInterface*>& OutMaterials,
+        bool bGetDebugMaterials = false) const override;
+
 private:
-    void CreateRenderMesh();
     void EnsurePlayer();
     void DestroyPlayer();
     void UpdateMesh();
     void DispatchEvents();
     void BuildPageMaterials();
-
-    UPROPERTY(Transient)
-    TObjectPtr<UProceduralMeshComponent> Mesh;
 
     UPROPERTY(Transient)
     TArray<TObjectPtr<UMaterialInstanceDynamic>> PageMaterials;

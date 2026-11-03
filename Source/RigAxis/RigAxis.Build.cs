@@ -11,8 +11,7 @@ public class RigAxis : ModuleRules
         {
             "Core",
             "CoreUObject",
-            "Engine",
-            "ProceduralMeshComponent"
+            "Engine"
         });
 
         string ThirdPartyDir = Path.Combine(ModuleDirectory, "..", "ThirdParty", "RigAxis");

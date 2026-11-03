@@ -3,11 +3,11 @@
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/App.h"
-#include "ProceduralMeshComponent.h"
 #include "RigAxisLog.h"
 #include "RigAxisMeshBuilder.h"
 #include "RigAxisPlayer.h"
 #include "RigAxisRenderData.h"
+#include "RigAxisSceneProxy.h"
 #include "RigAxisSkeletonAsset.h"
 #include "RigAxisSkeletonData.h"
 
@@ -110,22 +110,83 @@ void URigAxisComponent::TickComponent(
     }
 }
 
-void URigAxisComponent::CreateRenderMesh()
+FPrimitiveSceneProxy* URigAxisComponent::CreateSceneProxy()
 {
-    if (IsValid(Mesh))
+    if (!Impl || Impl->Sections.Num() == 0)
     {
+        return nullptr;
+    }
+
+    TArray<UMaterialInterface*> Materials;
+    GetUsedMaterials(Materials);
+    if (Materials.Num() == 0)
+    {
+        return nullptr;
+    }
+
+    const FVector Normal = Plane == ERigAxisPlane::XZ
+        ? FVector(0.0f, -1.0f, 0.0f)
+        : FVector(0.0f, 0.0f, 1.0f);
+    return CreateRigAxisSceneProxy(this, Impl->Sections, Materials, Normal);
+}
+
+FBoxSphereBounds URigAxisComponent::CalcBounds(const FTransform& LocalToWorld) const
+{
+    FBox Box(ForceInit);
+    if (Impl)
+    {
+        for (const FRigAxisMeshSection& Section : Impl->Sections)
+        {
+            for (const FVector& Position : Section.Positions)
+            {
+                Box += Position;
+            }
+        }
+    }
+
+    if (Box.IsValid)
+    {
+        return FBoxSphereBounds(Box).TransformBy(LocalToWorld);
+    }
+
+    return FBoxSphereBounds(LocalToWorld.GetLocation(), FVector::ZeroVector, 0.0f);
+}
+
+int32 URigAxisComponent::GetNumMaterials() const
+{
+    if (PageMaterials.Num() > 0)
+    {
+        return PageMaterials.Num();
+    }
+    return MeshMaterial ? 1 : 0;
+}
+
+UMaterialInterface* URigAxisComponent::GetMaterial(int32 ElementIndex) const
+{
+    if (PageMaterials.IsValidIndex(ElementIndex))
+    {
+        return PageMaterials[ElementIndex];
+    }
+    return ElementIndex == 0 ? MeshMaterial : nullptr;
+}
+
+void URigAxisComponent::GetUsedMaterials(
+    TArray<UMaterialInterface*>& OutMaterials,
+    bool bGetDebugMaterials) const
+{
+    if (PageMaterials.Num() > 0)
+    {
+        for (const TObjectPtr<UMaterialInstanceDynamic>& Material : PageMaterials)
+        {
+            OutMaterials.Add(Material);
+        }
         return;
     }
 
-    UObject* Outer = GetOwner() ? static_cast<UObject*>(GetOwner()) : this;
-    Mesh = NewObject<UProceduralMeshComponent>(Outer);
-    Mesh->SetupAttachment(this);
-    Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    Mesh->SetGenerateOverlapEvents(false);
-    Mesh->SetCastShadow(false);
-    Mesh->SetMobility(EComponentMobility::Movable);
-    Mesh->bUseAsyncCooking = false;
-    Mesh->RegisterComponent();
+    if (MeshMaterial)
+    {
+        OutMaterials.Add(MeshMaterial);
+    }
 }
 
 void URigAxisComponent::EnsurePlayer()
@@ -134,8 +195,6 @@ void URigAxisComponent::EnsurePlayer()
     {
         return;
     }
-
-    CreateRenderMesh();
 
     if (!SkeletonAsset)
     {
@@ -201,14 +260,7 @@ void URigAxisComponent::DestroyPlayer()
     Impl->BoundMaterial.Reset();
     Impl->AssetVersion = INDEX_NONE;
     PageMaterials.Reset();
-
-    if (Mesh && IsValid(Mesh))
-    {
-        for (int32 Index = Mesh->GetNumSections() - 1; Index >= 0; --Index)
-        {
-            Mesh->ClearMeshSection(Index);
-        }
-    }
+    MarkRenderStateDirty();
 }
 
 void URigAxisComponent::BuildPageMaterials()
@@ -232,7 +284,7 @@ void URigAxisComponent::BuildPageMaterials()
 
 void URigAxisComponent::UpdateMesh()
 {
-    if (!Impl || !Mesh || !Impl->RenderData.IsValid())
+    if (!Impl || !Impl->RenderData.IsValid())
     {
         return;
     }
@@ -252,44 +304,8 @@ void URigAxisComponent::UpdateMesh()
         bFlipY,
         Impl->Sections);
 
-    const FVector Normal = Plane == ERigAxisPlane::XZ
-        ? FVector(0.0f, -1.0f, 0.0f)
-        : FVector(0.0f, 0.0f, 1.0f);
-    TArray<FVector> Normals;
-    TArray<FProcMeshTangent> Tangents;
-
-    for (int32 Index = 0; Index < Impl->Sections.Num(); ++Index)
-    {
-        const FRigAxisMeshSection& Section = Impl->Sections[Index];
-        if (Section.Positions.Num() == 0 || Section.Indices.Num() == 0)
-        {
-            Mesh->ClearMeshSection(Index);
-            continue;
-        }
-
-        Normals.Init(Normal, Section.Positions.Num());
-        Mesh->CreateMeshSection_LinearColor(
-            Index,
-            Section.Positions,
-            Section.Indices,
-            Normals,
-            Section.UVs,
-            Section.Colors,
-            Tangents,
-            false);
-
-        UMaterialInterface* BatchMaterial = MeshMaterial;
-        if (PageMaterials.IsValidIndex(static_cast<int32>(Section.Page)))
-        {
-            BatchMaterial = PageMaterials[Section.Page];
-        }
-        Mesh->SetMaterial(Index, BatchMaterial);
-    }
-
-    for (int32 Index = Impl->Sections.Num(); Index < Mesh->GetNumSections(); ++Index)
-    {
-        Mesh->ClearMeshSection(Index);
-    }
+    MarkRenderStateDirty();
+    UpdateBounds();
 }
 
 void URigAxisComponent::DispatchEvents()
