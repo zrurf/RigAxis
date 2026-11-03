@@ -17,7 +17,13 @@ Early development. The current milestone is the repository skeleton: plugin modu
 
 ## Building
 
-Requires Unreal Engine 5.8 and Visual Studio 2026 on Windows.
+Requires Unreal Engine 5.8, Visual Studio 2026, and Rust 1.99 on Windows.
+
+Build the native library (the output is ignored by git):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Scripts\BuildRust.ps1
+```
 
 Create the local test plugin shim once (ignored by git):
 
