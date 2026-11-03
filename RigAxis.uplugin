@@ -1,0 +1,28 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "RigAxis",
+  "Description": "Rigby2D-compatible 2D skeletal animation runtime for Unreal Engine 5.",
+  "Category": "Animation",
+  "CreatedBy": "RigAxis contributors",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": true,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "RigAxis",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    },
+    {
+      "Name": "RigAxisEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}

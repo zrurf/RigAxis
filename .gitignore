@@ -1,0 +1,29 @@
+# Unreal Engine generated files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+.vs/
+*.sln
+*.suo
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# Rust build output
+Rust/target/
+
+# Local test project plugin link
+Tests/RigAxisTest/Plugins/
+Tests/RigAxisTest/Config/DefaultInput.ini
+
+# Local design notes
+dev-note/
+
+# IDE and OS
+.idea/
+.vscode/
+*.user
+Thumbs.db
+.DS_Store

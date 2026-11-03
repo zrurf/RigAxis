@@ -1,0 +1,19 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.8",
+  "Category": "",
+  "Description": "Host project for RigAxis development.",
+  "Modules": [
+    {
+      "Name": "RigAxisTest",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "RigAxis",
+      "Enabled": true
+    }
+  ]
+}
