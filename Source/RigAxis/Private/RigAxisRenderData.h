@@ -2,17 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "RigAxis/RigAxis.h"
+#include "RigAxisTypes.h"
 
 class FRigAxisPlayer;
 class FRigAxisSkeletonData;
-
-enum class ERigAxisBlend : uint8
-{
-    Normal = 0,
-    Additive = 1,
-    Multiply = 2,
-    Screen = 3
-};
 
 struct FRigAxisVertex
 {
