@@ -4,25 +4,39 @@ A Rigby2D-compatible 2D skeletal animation runtime for Unreal Engine 5.
 
 RigAxis plays Rigby2D skeleton and scene exports inside Unreal Engine, with a Blueprint-friendly component API and a native Rust core. It is an independent, unofficial project and is not affiliated with or endorsed by the Rigby2D project.
 
-## Status
+## Features
 
-Early development. The current milestone is the repository skeleton: plugin modules, a host project, and the `RigAxis.Version` console command.
+- Skeleton and atlas loading (`.skel`, skeleton `.json`, `.atlas`).
+- Track playback with crossfades, queues, speed, and manual time control.
+- Animation events exposed as Blueprint delegates.
+- Skins and physics reset.
+- Custom `FPrimitiveSceneProxy` renderer with per-page, per-blend, and two-color tint materials.
+- Default unlit sprite materials for normal, additive, multiply, and screen blending.
+- Editor importers and reimport for skeleton and scene assets.
+- Bone follower component for attaching actors or components to animated bones.
+- Scene manifests (`.scene.json`) with stage parallax, actors, shots, and camera bones.
 
-## Repository layout
+## Components
 
-- `Source/RigAxis` — runtime module.
-- `Source/RigAxisEditor` — editor-only module; importers will live here.
-- `Tests/RigAxisTest` — host project used for local builds and automation.
-- `dev-note/` — local design notes, not versioned.
+- `URigAxisComponent` — skeleton playback and rendering.
+- `URigAxisBoneFollowerComponent` — follows a bone of a `URigAxisComponent`.
+- `URigAxisSceneComponent` — plays a `URigAxisSceneAsset` and renders stage plus actors.
+
+## Assets
+
+- `URigAxisSkeletonAsset` — skeleton bytes, atlas bytes, atlas page textures, and load status.
+- `URigAxisSceneAsset` — scene manifest plus the stage and actor skeleton assets.
 
 ## Building
 
-Requires Unreal Engine 5.8, Visual Studio 2026, and Rust 1.99 on Windows.
+Developed and tested with Unreal Engine 5.8, Visual Studio 2026, and Rust 1.99. Older engine versions are not verified yet.
 
-Build the native library (the output is ignored by git):
+### Windows
+
+Build the native library (output is ignored by git):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Scripts\BuildRust.ps1
+powershell -ExecutionPolicy Bypass -File Scripts\BuildRust.ps1 -Target win64
 ```
 
 Create the local test plugin shim once (ignored by git):
@@ -34,17 +48,61 @@ powershell -ExecutionPolicy Bypass -File Scripts\LinkTestPlugin.ps1
 ```powershell
 & "E:\UnrealEngine\UE_5.8\Engine\Build\BatchFiles\Build.bat" `
   RigAxisTestEditor Win64 Development `
-  -Project="E:\Projects\URigby2D\Tests\RigAxisTest\RigAxisTest.uproject" `
+  "E:\Projects\URigby2D\Tests\RigAxisTest\RigAxisTest.uproject" `
   -WaitMutex
 ```
 
-Run the version command:
+### Android
+
+Build both Android architectures with the NDK:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Scripts\BuildRust.ps1 -Target android
+```
+
+`ANDROID_NDK_HOME` (or `NDK_HOME`) must point to the NDK. The Unreal Android platform component and SDK must also be installed for cook and packaging.
+
+### macOS, iOS, Linux
+
+Run the shell script on the matching host:
+
+```bash
+./Scripts/BuildRust.sh mac
+./Scripts/BuildRust.sh ios
+./Scripts/BuildRust.sh linux
+./Scripts/BuildRust.sh all
+```
+
+The script copies libraries to the paths expected by `RigAxis.Build.cs`:
+
+- `Source/ThirdParty/RigAxis/lib/Mac/rigaxis_ffi.a`
+- `Source/ThirdParty/RigAxis/lib/iOS/arm64/rigaxis_ffi.a`
+- `Source/ThirdParty/RigAxis/lib/iOS/simulator/rigaxis_ffi.a`
+- `Source/ThirdParty/RigAxis/lib/Linux/x64/rigaxis_ffi.a`
+
+## Sample content
+
+- `Tests/RigAxisTest/Content/RigAxisTest/Map_RigAxisTest.umap` — skeleton component sample.
+- `Tests/RigAxisTest/Content/RigAxisTest/Map_RigAxisScene.umap` — scene component sample.
+- `Tests/Fixtures/` — original skeleton, atlas, and scene fixtures used by importers and tests.
+
+Run the automation suite:
 
 ```powershell
 & "E:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
   "E:\Projects\URigby2D\Tests\RigAxisTest\RigAxisTest.uproject" `
-  -ExecCmds="RigAxis.Version,Quit" -unattended -nullrhi -nosplash -stdout
+  -ExecCmds="Automation RunTests RigAxis; Quit" `
+  -unattended -nullrhi -nosplash -stdout `
+  -TestExit="Automation Test Queue Empty"
 ```
+
+## Limitations
+
+- Runtime only; there is no rigging or animation authoring editor.
+- Scene playback does not emit per-animation events; use a `URigAxisComponent` for event-driven playback.
+- Multiply and screen blending are approximations of the Rigby2D blend equations.
+- Bone followers cannot represent shear; they use translation, rotation, and scale.
+- Only the Win64 build is currently exercised end to end in this repository.
 
 ## Trademarks
 
@@ -52,4 +110,4 @@ The Rigby2D, NILA and Rigbytron names, logos and artwork are trademarks or regis
 
 ## License
 
-The plugin is planned to be released under the Apache License 2.0. The bundled Rigby2D runtime is available under MIT OR Apache-2.0; a `THIRD_PARTY_NOTICES.md` is included with attribution.
+The plugin is released under the Apache License 2.0. The bundled Rigby2D runtime is available under MIT OR Apache-2.0; `THIRD_PARTY_NOTICES.md` contains the attribution.
