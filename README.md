@@ -102,6 +102,8 @@ Run the automation suite:
 - Scene playback does not emit per-animation events; use a `URigAxisComponent` for event-driven playback.
 - Multiply and screen blending are approximations of the Rigby2D blend equations.
 - Bone followers cannot represent shear; they use translation, rotation, and scale.
+- Skeleton reimport refreshes skeleton and atlas data; changed atlas page PNGs are not reimported yet.
+- Scene manifests are imported but not reimported.
 - Only the Win64 build is currently exercised end to end in this repository.
 
 ## Trademarks

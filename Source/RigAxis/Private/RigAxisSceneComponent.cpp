@@ -165,20 +165,27 @@ void URigAxisSceneComponent::EnsureScene()
     uint32 Version = SceneAsset->ManifestBytes.Num() > 0
         ? FCrc::MemCrc32(SceneAsset->ManifestBytes.GetData(), SceneAsset->ManifestBytes.Num())
         : 0;
+    Version = HashCombine(Version, GetTypeHash(SceneAsset->StagePath));
     if (SceneAsset->Stage)
     {
+        Version = HashCombine(Version, GetTypeHash(SceneAsset->Stage.Get()));
         Version = HashCombine(Version, GetTypeHash(SceneAsset->Stage->GetVersion()));
     }
     for (const TPair<FString, TObjectPtr<URigAxisSkeletonAsset>>& Pair : SceneAsset->ActorSkeletons)
     {
+        Version = HashCombine(Version, GetTypeHash(Pair.Key));
         if (Pair.Value)
         {
+            Version = HashCombine(Version, GetTypeHash(Pair.Value.Get()));
             Version = HashCombine(Version, GetTypeHash(Pair.Value->GetVersion()));
+        }
+        if (const FString* Path = SceneAsset->ActorSkeletonPaths.Find(Pair.Key))
+        {
+            Version = HashCombine(Version, GetTypeHash(*Path));
         }
     }
 
-    if (Impl->Player.IsValid()
-        && Impl->BoundAsset.Get() == SceneAsset
+    if (Impl->BoundAsset.Get() == SceneAsset
         && Impl->SceneVersion == Version)
     {
         return;
@@ -192,6 +199,8 @@ void URigAxisSceneComponent::EnsureScene()
     {
         UE_LOG(LogRigAxis, Error, TEXT("%s: %s"), *GetPathName(), *Error);
         Impl->Player.Reset();
+        Impl->BoundAsset = SceneAsset;
+        Impl->SceneVersion = Version;
         return;
     }
 
@@ -201,6 +210,8 @@ void URigAxisSceneComponent::EnsureScene()
         UE_LOG(LogRigAxis, Error, TEXT("%s: %s"), *GetPathName(), *Error);
         Impl->RenderData.Reset();
         Impl->Player.Reset();
+        Impl->BoundAsset = SceneAsset;
+        Impl->SceneVersion = Version;
         return;
     }
 
@@ -220,6 +231,8 @@ void URigAxisSceneComponent::DestroyScene()
         && Impl->Sections.Num() == 0
         && SectionMaterials.Num() == 0)
     {
+        Impl->BoundAsset.Reset();
+        Impl->SceneVersion = 0;
         return;
     }
 
@@ -426,7 +439,7 @@ UMaterialInterface* URigAxisSceneComponent::SelectMaterial(ERigAxisBlend Blend) 
 
 FPrimitiveSceneProxy* URigAxisSceneComponent::CreateSceneProxy()
 {
-    if (!Impl || Impl->Sections.Num() == 0)
+    if (!Impl || Impl->Sections.Num() == 0 || SectionMaterials.Num() != Impl->Sections.Num())
     {
         return nullptr;
     }

@@ -47,5 +47,6 @@ private:
     void RefreshTarget();
 
     TWeakObjectPtr<URigAxisComponent> BoundTarget;
+    FName BoundBone;
     bool bWarned = false;
 };

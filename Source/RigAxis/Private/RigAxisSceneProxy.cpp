@@ -54,14 +54,7 @@ namespace
                     : nullptr;
                 if (!MaterialProxy)
                 {
-                    for (FMaterialRenderProxy* Candidate : Materials)
-                    {
-                        if (Candidate)
-                        {
-                            MaterialProxy = Candidate;
-                            break;
-                        }
-                    }
+                    continue;
                 }
 
                 if (!MaterialProxy)

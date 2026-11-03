@@ -166,7 +166,7 @@ void URigAxisComponent::TickComponent(
 
 FPrimitiveSceneProxy* URigAxisComponent::CreateSceneProxy()
 {
-    if (!Impl || Impl->Sections.Num() == 0)
+    if (!Impl || Impl->Sections.Num() == 0 || SectionMaterials.Num() != Impl->Sections.Num())
     {
         return nullptr;
     }
@@ -270,8 +270,7 @@ void URigAxisComponent::EnsurePlayer()
     }
 
     const int32 Version = SkeletonAsset->GetVersion();
-    if (Impl->Player.IsValid()
-        && Impl->BoundAsset.Get() == SkeletonAsset
+    if (Impl->BoundAsset.Get() == SkeletonAsset
         && Impl->AssetVersion == Version)
     {
         return;
@@ -283,6 +282,8 @@ void URigAxisComponent::EnsurePlayer()
     if (!Impl->Data.IsValid())
     {
         UE_LOG(LogRigAxis, Error, TEXT("%s: %s"), *GetPathName(), *SkeletonAsset->GetLoadError());
+        Impl->BoundAsset = SkeletonAsset;
+        Impl->AssetVersion = Version;
         return;
     }
 
@@ -293,6 +294,8 @@ void URigAxisComponent::EnsurePlayer()
         UE_LOG(LogRigAxis, Error, TEXT("%s: %s"), *GetPathName(), *Error);
         Impl->Player.Reset();
         Impl->Data.Reset();
+        Impl->BoundAsset = SkeletonAsset;
+        Impl->AssetVersion = Version;
         return;
     }
 
@@ -303,6 +306,8 @@ void URigAxisComponent::EnsurePlayer()
         Impl->RenderData.Reset();
         Impl->Player.Reset();
         Impl->Data.Reset();
+        Impl->BoundAsset = SkeletonAsset;
+        Impl->AssetVersion = Version;
         return;
     }
 
@@ -327,6 +332,8 @@ void URigAxisComponent::DestroyPlayer()
         && Impl->Sections.Num() == 0
         && SectionMaterials.Num() == 0)
     {
+        Impl->BoundAsset.Reset();
+        Impl->AssetVersion = INDEX_NONE;
         return;
     }
 

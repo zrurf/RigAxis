@@ -24,20 +24,25 @@ void URigAxisBoneFollowerComponent::BeginPlay()
 void URigAxisBoneFollowerComponent::RefreshTarget()
 {
     URigAxisComponent* Current = Target.Get();
-    if (BoundTarget.Get() == Current)
+    const bool bTargetChanged = BoundTarget.Get() != Current;
+    if (!bTargetChanged && BoundBone == Bone)
     {
         return;
     }
 
-    if (BoundTarget.IsValid())
+    if (bTargetChanged)
     {
-        RemoveTickPrerequisiteComponent(BoundTarget.Get());
+        if (BoundTarget.IsValid())
+        {
+            RemoveTickPrerequisiteComponent(BoundTarget.Get());
+        }
+        BoundTarget = Target;
+        if (Current)
+        {
+            AddTickPrerequisiteComponent(Current);
+        }
     }
-    BoundTarget = Target;
-    if (Current)
-    {
-        AddTickPrerequisiteComponent(Current);
-    }
+    BoundBone = Bone;
     bWarned = false;
 }
 
