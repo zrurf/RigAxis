@@ -1,9 +1,9 @@
 #include "RigAxisSceneProxy.h"
 
+#include "Components/MeshComponent.h"
 #include "DynamicMeshBuilder.h"
 #include "MaterialShared.h"
 #include "PrimitiveSceneProxy.h"
-#include "RigAxisComponent.h"
 
 namespace
 {
@@ -11,7 +11,7 @@ namespace
     {
     public:
         FRigAxisSceneProxy(
-            const URigAxisComponent* Component,
+            const UMeshComponent* Component,
             const FRigAxisSceneStateRef& InState,
             const TArray<UMaterialInterface*>& InMaterials)
             : FPrimitiveSceneProxy(Component)
@@ -145,7 +145,7 @@ namespace
 }
 
 FPrimitiveSceneProxy* CreateRigAxisSceneProxy(
-    const URigAxisComponent* Component,
+    const UMeshComponent* Component,
     const FRigAxisSceneStateRef& State,
     const TArray<UMaterialInterface*>& Materials)
 {

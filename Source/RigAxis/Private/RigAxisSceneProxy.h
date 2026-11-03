@@ -6,7 +6,7 @@
 
 class FPrimitiveSceneProxy;
 class UMaterialInterface;
-class URigAxisComponent;
+class UMeshComponent;
 
 struct FRigAxisSceneState
 {
@@ -18,6 +18,6 @@ struct FRigAxisSceneState
 using FRigAxisSceneStateRef = TSharedRef<FRigAxisSceneState, ESPMode::ThreadSafe>;
 
 FPrimitiveSceneProxy* CreateRigAxisSceneProxy(
-    const URigAxisComponent* Component,
+    const UMeshComponent* Component,
     const FRigAxisSceneStateRef& State,
     const TArray<UMaterialInterface*>& Materials);

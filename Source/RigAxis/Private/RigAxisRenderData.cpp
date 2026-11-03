@@ -65,6 +65,22 @@ bool FRigAxisRenderData::Build(
         return false;
     }
 
+    return CopyBatches();
+}
+
+bool FRigAxisRenderData::BuildScene(RigAxisScene* Scene)
+{
+    if (!IsValid() || !Scene)
+    {
+        return false;
+    }
+
+    rigaxis_scene_build_render(Scene, Render);
+    return CopyBatches();
+}
+
+bool FRigAxisRenderData::CopyBatches()
+{
     const uint32 Count = rigaxis_render_batch_count(Render);
     Batches.SetNum(static_cast<int32>(Count));
     for (uint32 BatchIndex = 0; BatchIndex < Count; ++BatchIndex)
