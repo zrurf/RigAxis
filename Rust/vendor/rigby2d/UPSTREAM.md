@@ -1,8 +1,9 @@
 # Rigby2D runtime snapshot
 
 - Repository: https://github.com/jaisurya-dev-art/rigby2d
-- Commit: `13295900f890ca960174b9403f782e69623e028b`
-- Date: 2026-11-02
+- Commit: `3f84269ecd9aa9e6ff09bdb967c05dc42eb2b8c5`
+- Upstream release: `v0.5.1`
+- Date: 2026-11-11
 - Crate: `runtimes/rust/rigby-runtime`
 - Version: 0.2.0
 - License: MIT OR Apache-2.0
