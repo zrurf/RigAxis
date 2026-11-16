@@ -197,7 +197,20 @@ const char* rigaxis_scene_source_id(const RigAxisScene* scene, uint32_t source);
 uint32_t rigaxis_scene_actor_count(const RigAxisScene* scene);
 const char* rigaxis_scene_actor_id(const RigAxisScene* scene, uint32_t actor);
 const char* rigaxis_scene_actor_name(const RigAxisScene* scene, uint32_t actor);
+
+/** Stage bone queries. Bone indices follow the stage skeleton order. */
+uint32_t rigaxis_scene_stage_bone_count(const RigAxisScene* scene);
+bool rigaxis_scene_stage_bone_world(const RigAxisScene* scene, uint32_t bone, RigAxisAffine* out);
+
+/** Actor bone queries. Actor is the actor index from rigaxis_scene_actor_count. */
+uint32_t rigaxis_scene_actor_bone_count(const RigAxisScene* scene, uint32_t actor);
 bool rigaxis_scene_actor_bone_world(const RigAxisScene* scene, uint32_t actor, const char* bone, RigAxisAffine* out);
+bool rigaxis_scene_actor_bone_world_at(const RigAxisScene* scene, uint32_t actor, uint32_t bone, RigAxisAffine* out);
+
+/** Scene draw list, back to front. layer_actor returns -1 for a stage slot. */
+uint32_t rigaxis_scene_layer_count(const RigAxisScene* scene);
+bool rigaxis_scene_layer_at(const RigAxisScene* scene, uint32_t layer, uint32_t* out_slot, int32_t* out_actor);
+
 bool rigaxis_scene_camera_world(const RigAxisScene* scene, RigAxisAffine* out);
 void rigaxis_scene_build_render(RigAxisScene* scene, RigAxisRender* render);
 

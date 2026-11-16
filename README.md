@@ -115,9 +115,10 @@ Run the automation suite:
   -TestExit="Automation Test Queue Empty"
 ```
 
-Golden tests replay the recorded frames through the C ABI and compare bone transforms, vertices,
-colors, and events. To run additional local golden sets, point `RIGAXIS_GOLDEN_DIR` at a directory
-of `.golden.json` files; skeleton and atlas paths resolve next to the golden file first.
+Golden tests replay recorded skeleton and scene frames through the C ABI and compare bone
+transforms, vertices, colors, draw lists, and events. To run additional local golden sets, point
+`RIGAXIS_GOLDEN_DIR` at a directory of `.golden.json` files; skeleton and atlas paths resolve next
+to the golden file first.
 
 ## Limitations
 

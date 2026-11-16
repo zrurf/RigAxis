@@ -1480,6 +1480,96 @@ pub unsafe extern "C" fn rigaxis_scene_actor_name(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_stage_bone_count(scene: *const RigAxisScene) -> u32 {
+    scene_ref(scene).map_or(0, |scene| scene.player.stage.bones.len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_stage_bone_world(
+    scene: *const RigAxisScene,
+    bone: u32,
+    out: *mut RigAxisAffine,
+) -> bool {
+    let Some(scene) = scene_ref(scene) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let Some(world) = scene.player.pose.world.get(bone as usize) else {
+        return false;
+    };
+    unsafe {
+        *out = affine_value(world);
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_actor_bone_count(
+    scene: *const RigAxisScene,
+    actor: u32,
+) -> u32 {
+    scene_ref(scene)
+        .and_then(|scene| scene.player.character(actor as usize))
+        .map_or(0, |character| character.data.bones.len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_actor_bone_world_at(
+    scene: *const RigAxisScene,
+    actor: u32,
+    bone: u32,
+    out: *mut RigAxisAffine,
+) -> bool {
+    let Some(scene) = scene_ref(scene) else {
+        return false;
+    };
+    if out.is_null() {
+        return false;
+    }
+    let Some(character) = scene.player.character(actor as usize) else {
+        return false;
+    };
+    let Some(world) = character.pose.world.get(bone as usize) else {
+        return false;
+    };
+    unsafe {
+        *out = affine_value(world);
+    }
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_layer_count(scene: *const RigAxisScene) -> u32 {
+    scene_ref(scene).map_or(0, |scene| scene.player.draw_list().len() as u32)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_layer_at(
+    scene: *const RigAxisScene,
+    layer: u32,
+    out_slot: *mut u32,
+    out_actor: *mut i32,
+) -> bool {
+    let Some(scene) = scene_ref(scene) else {
+        return false;
+    };
+    if out_slot.is_null() || out_actor.is_null() {
+        return false;
+    }
+    let layers = scene.player.draw_list();
+    let Some(layer) = layers.get(layer as usize) else {
+        return false;
+    };
+    unsafe {
+        *out_slot = layer.slot as u32;
+        *out_actor = layer.actor.map_or(-1, |actor| actor as i32);
+    }
+    true
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn rigaxis_scene_actor_bone_world(
     scene: *const RigAxisScene,
     actor: u32,

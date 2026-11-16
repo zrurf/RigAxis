@@ -12,6 +12,7 @@ use std::slice;
 
 use rigaxis_ffi::*;
 use rigby_runtime::json::Json;
+use rigby_runtime::scene::read_scene_manifest;
 
 const DT: f64 = 1.0 / 30.0;
 const EVENT_COMPLETE: u32 = 2;
@@ -56,6 +57,13 @@ struct Render(*mut RigAxisRender);
 impl Drop for Render {
     fn drop(&mut self) {
         unsafe { rigaxis_render_free(self.0) };
+    }
+}
+
+struct Scene(*mut RigAxisScene);
+impl Drop for Scene {
+    fn drop(&mut self) {
+        unsafe { rigaxis_scene_free(self.0) };
     }
 }
 
@@ -167,6 +175,62 @@ fn create_render() -> Result<Render, String> {
         return Err(format!("cannot create render output: {}", last_error()));
     }
     Ok(Render(raw))
+}
+
+fn create_scene(manifest_path: &Path) -> Result<Scene, String> {
+    let manifest_bytes = std::fs::read(manifest_path)
+        .map_err(|e| format!("cannot read {}: {e}", manifest_path.display()))?;
+    let manifest = read_scene_manifest(&manifest_bytes).map_err(|e| e.0)?;
+    let directory = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+
+    let mut paths = vec![manifest.stage.clone()];
+    for actor in &manifest.scene.actors {
+        if let Some(skeleton) = &actor.skeleton {
+            if !paths.iter().any(|path| path == skeleton) {
+                paths.push(skeleton.clone());
+            }
+        }
+    }
+
+    let mut source_paths = Vec::new();
+    let mut skeletons = Vec::new();
+    let mut atlases = Vec::new();
+    for path in paths {
+        let skeleton_path = directory.join(&path);
+        let atlas_path = skeleton_path.with_extension("atlas");
+        let skeleton = std::fs::read(&skeleton_path)
+            .map_err(|e| format!("cannot read {}: {e}", skeleton_path.display()))?;
+        let atlas = std::fs::read(&atlas_path)
+            .map_err(|e| format!("cannot read {}: {e}", atlas_path.display()))?;
+        source_paths.push(c_string(&path));
+        skeletons.push(skeleton);
+        atlases.push(atlas);
+    }
+
+    let sources: Vec<RigAxisSceneSource> = (0..source_paths.len())
+        .map(|index| RigAxisSceneSource {
+            path: source_paths[index].as_ptr(),
+            skeleton: skeletons[index].as_ptr(),
+            skeleton_size: skeletons[index].len(),
+            atlas: atlases[index].as_ptr(),
+            atlas_size: atlases[index].len(),
+        })
+        .collect();
+
+    let mut raw = ptr::null_mut();
+    let status = unsafe {
+        rigaxis_scene_create(
+            manifest_bytes.as_ptr(),
+            manifest_bytes.len(),
+            sources.as_ptr(),
+            sources.len() as u32,
+            &mut raw,
+        )
+    };
+    if status != RigAxisStatus::Ok {
+        return Err(format!("cannot load scene: {}", last_error()));
+    }
+    Ok(Scene(raw))
 }
 
 fn set_animation(
@@ -296,13 +360,43 @@ fn bone_world(pose: &Pose, bone: u32) -> Result<RigAxisAffine, String> {
     Ok(affine)
 }
 
+fn compare_bone_world(
+    affine: &RigAxisAffine,
+    expected: &[Json],
+    bone: usize,
+    worst: &mut Worst,
+    at: &str,
+) {
+    for (channel, value) in [affine.a, affine.b, affine.c, affine.d, affine.tx, affine.ty]
+        .into_iter()
+        .enumerate()
+    {
+        let expected_value = expected[bone * 6 + channel].as_f64().unwrap_or(f64::NAN);
+        let error = close(value, expected_value, 1.0);
+        if error > worst.world {
+            worst.world = error;
+            worst.at =
+                format!("{at}, bone {bone} value {channel}: ffi {value} js {expected_value}");
+        }
+    }
+}
+
 fn render_vertices(render: &Render) -> Vec<RigAxisVertex> {
+    render_vertices_filtered(render, None)
+}
+
+fn render_source_vertices(render: &Render, source: u32) -> Vec<RigAxisVertex> {
+    render_vertices_filtered(render, Some(source))
+}
+
+fn render_vertices_filtered(render: &Render, source: Option<u32>) -> Vec<RigAxisVertex> {
     let count = unsafe { rigaxis_render_batch_count(render.0) };
     let mut vertices = Vec::new();
     for index in 0..count {
         let mut batch = empty_batch();
         if !unsafe { rigaxis_render_batch_at(render.0, index, &mut batch) }
             || batch.vertex_count == 0
+            || source.is_some_and(|source| batch.source != source)
         {
             continue;
         }
@@ -310,6 +404,59 @@ fn render_vertices(render: &Render) -> Vec<RigAxisVertex> {
         vertices.extend_from_slice(slice);
     }
     vertices
+}
+
+fn compare_quads(
+    vertices: &[RigAxisVertex],
+    quads: &[Json],
+    compare_colors: bool,
+    worst: &mut Worst,
+    at: &str,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    let expected_vertices: usize = quads
+        .iter()
+        .map(|quad| quad.get("positions").as_array().len() / 2)
+        .sum();
+    if vertices.len() != expected_vertices {
+        problems.push(format!(
+            "{at}: {} vertices, expected {expected_vertices}",
+            vertices.len()
+        ));
+        return problems;
+    }
+
+    let mut vertex = 0;
+    for quad in quads {
+        let positions = quad.get("positions").as_array();
+        let color = quad.get("color").as_array();
+        for corner in 0..positions.len() / 2 {
+            let actual = &vertices[vertex];
+            let x = positions[corner * 2].as_f64().unwrap_or(f64::NAN);
+            let y = positions[corner * 2 + 1].as_f64().unwrap_or(f64::NAN);
+            worst.positions = worst.positions.max(close(actual.x as f64, x, 1.0));
+            worst.positions = worst.positions.max(close(actual.y as f64, y, 1.0));
+            if compare_colors {
+                for (channel, value) in [
+                    actual.light_r,
+                    actual.light_g,
+                    actual.light_b,
+                    actual.light_a,
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let expected_color = color
+                        .get(channel)
+                        .and_then(Json::as_f64)
+                        .unwrap_or(f64::NAN);
+                    worst.color = worst.color.max(close(value as f64, expected_color, 1.0));
+                }
+            }
+            vertex += 1;
+        }
+    }
+    problems
 }
 
 fn drain_events(state: &State) -> Vec<String> {
@@ -418,45 +565,7 @@ fn replay(
         }
         let vertices = render_vertices(render);
         let quads = expected.get("quads").as_array();
-        let expected_vertices: usize = quads
-            .iter()
-            .map(|quad| quad.get("positions").as_array().len() / 2)
-            .sum();
-        if vertices.len() != expected_vertices {
-            problems.push(format!(
-                "{at}: {} vertices, expected {expected_vertices}",
-                vertices.len()
-            ));
-        } else {
-            let mut vertex = 0;
-            for quad in quads {
-                let positions = quad.get("positions").as_array();
-                let color = quad.get("color").as_array();
-                for corner in 0..positions.len() / 2 {
-                    let actual = &vertices[vertex];
-                    let x = positions[corner * 2].as_f64().unwrap_or(f64::NAN);
-                    let y = positions[corner * 2 + 1].as_f64().unwrap_or(f64::NAN);
-                    worst.positions = worst.positions.max(close(actual.x as f64, x, 1.0));
-                    worst.positions = worst.positions.max(close(actual.y as f64, y, 1.0));
-                    for (channel, value) in [
-                        actual.light_r,
-                        actual.light_g,
-                        actual.light_b,
-                        actual.light_a,
-                    ]
-                    .into_iter()
-                    .enumerate()
-                    {
-                        let expected_color = color
-                            .get(channel)
-                            .and_then(Json::as_f64)
-                            .unwrap_or(f64::NAN);
-                        worst.color = worst.color.max(close(value as f64, expected_color, 1.0));
-                    }
-                    vertex += 1;
-                }
-            }
-        }
+        problems.extend(compare_quads(&vertices, quads, true, worst, &at));
 
         let expected_events: Vec<String> = expected
             .get("events")
@@ -600,5 +709,236 @@ fn matches_reference_frames() {
     }
 
     assert!(checked > 0, "no golden files");
+    assert!(failures.is_empty(), "\n{}", failures.join("\n"));
+}
+
+fn find_actor(scene: &Scene, id: &str) -> Option<u32> {
+    let count = unsafe { rigaxis_scene_actor_count(scene.0) };
+    for index in 0..count {
+        let actor = unsafe { rigaxis_scene_actor_id(scene.0, index) };
+        if c_text(actor) == id {
+            return Some(index);
+        }
+    }
+    None
+}
+
+fn find_source(scene: &Scene, id: &str) -> Option<u32> {
+    let count = unsafe { rigaxis_scene_source_count(scene.0) };
+    for index in 1..count {
+        let source = unsafe { rigaxis_scene_source_id(scene.0, index) };
+        if c_text(source) == id {
+            return Some(index);
+        }
+    }
+    None
+}
+
+fn replay_scene(
+    scene: &Scene,
+    render: &Render,
+    golden: &Json,
+    worst: &mut Worst,
+    label: &str,
+) -> Result<Vec<String>, String> {
+    let mut problems = Vec::new();
+    for shot in golden.get("shots").as_array() {
+        let shot_name = shot.str_or("shot", "");
+        let name = c_string(shot_name);
+        unsafe { rigaxis_scene_play(scene.0, name.as_ptr(), true) };
+        let frames = shot.get("frames").as_array();
+        let mut frame_index = 0;
+
+        for step in 1..=frames.len() * 3 {
+            unsafe { rigaxis_scene_update(scene.0, DT) };
+            if step % 3 != 0 {
+                continue;
+            }
+            let Some(expected) = frames.get(frame_index) else {
+                break;
+            };
+            frame_index += 1;
+            let at = format!("{label} scene '{shot_name}' frame {frame_index}");
+
+            let time = unsafe { rigaxis_scene_time(scene.0) };
+            let expected_time = expected.num("time", f64::NAN);
+            if close(time, expected_time, 1.0) > 1e-9 {
+                problems.push(format!("{at}: time {time} expected {expected_time}"));
+            }
+
+            let stage = expected.get("stage").as_array();
+            let bone_count = stage.len() / 6;
+            let actual_bones = unsafe { rigaxis_scene_stage_bone_count(scene.0) } as usize;
+            if actual_bones != bone_count {
+                problems.push(format!(
+                    "{at}: stage has {actual_bones} bones, expected {bone_count}"
+                ));
+            }
+            for bone in 0..bone_count {
+                let mut affine = empty_affine();
+                if !unsafe { rigaxis_scene_stage_bone_world(scene.0, bone as u32, &mut affine) } {
+                    return Err(format!("{at}: cannot read stage bone {bone}"));
+                }
+                compare_bone_world(&affine, stage, bone, worst, &at);
+            }
+
+            let layers = expected.get("layers").as_array();
+            let actual_layers = unsafe { rigaxis_scene_layer_count(scene.0) } as usize;
+            if actual_layers != layers.len() {
+                problems.push(format!(
+                    "{at}: {actual_layers} layers, expected {}",
+                    layers.len()
+                ));
+            }
+            for (index, layer) in layers.iter().enumerate() {
+                let expected = layer.as_array();
+                let mut slot = 0;
+                let mut actor = -1;
+                if !unsafe { rigaxis_scene_layer_at(scene.0, index as u32, &mut slot, &mut actor) }
+                {
+                    problems.push(format!("{at}: cannot read layer {index}"));
+                    continue;
+                }
+                let expected_slot =
+                    expected.first().and_then(Json::as_f64).unwrap_or(f64::NAN) as u32;
+                let expected_actor =
+                    expected.get(1).and_then(Json::as_f64).unwrap_or(f64::NAN) as i32;
+                if slot != expected_slot || actor != expected_actor {
+                    problems.push(format!(
+                        "{at}: layer {index} is ({slot}, {actor}), expected ({expected_slot}, {expected_actor})"
+                    ));
+                }
+            }
+
+            let actors = expected.get("actors").as_array();
+            if actors.iter().any(|actor| actor.get("quads").is_array()) {
+                unsafe { rigaxis_scene_build_render(scene.0, render.0) };
+            }
+            for actor in actors {
+                let id = actor.str_or("id", "");
+                let Some(actor_index) = find_actor(scene, id) else {
+                    problems.push(format!("{at}: no actor '{id}'"));
+                    continue;
+                };
+                let world = actor.get("world").as_array();
+                let bone_count = world.len() / 6;
+                let actual_bones =
+                    unsafe { rigaxis_scene_actor_bone_count(scene.0, actor_index) } as usize;
+                if actual_bones != bone_count {
+                    problems.push(format!(
+                        "{at}: actor '{id}' has {actual_bones} bones, expected {bone_count}"
+                    ));
+                }
+                for bone in 0..bone_count {
+                    let mut affine = empty_affine();
+                    if !unsafe {
+                        rigaxis_scene_actor_bone_world_at(
+                            scene.0,
+                            actor_index,
+                            bone as u32,
+                            &mut affine,
+                        )
+                    } {
+                        return Err(format!("{at}: cannot read actor '{id}' bone {bone}"));
+                    }
+                    compare_bone_world(&affine, world, bone, worst, &at);
+                }
+                let quads = actor.get("quads");
+                if quads.is_array() {
+                    let Some(source) = find_source(scene, id) else {
+                        problems.push(format!("{at}: no render source for actor '{id}'"));
+                        continue;
+                    };
+                    let vertices = render_source_vertices(render, source);
+                    problems.extend(compare_quads(
+                        &vertices,
+                        quads.as_array(),
+                        false,
+                        worst,
+                        &at,
+                    ));
+                }
+            }
+        }
+
+        if frame_index != frames.len() {
+            problems.push(format!(
+                "{label} scene '{shot_name}': {frame_index} of {} frames played",
+                frames.len()
+            ));
+        }
+    }
+    Ok(problems)
+}
+
+#[test]
+fn scenes_match_reference_frames() {
+    let mut failures = Vec::new();
+    let mut checked = 0;
+
+    for file in golden_files() {
+        let text = std::fs::read_to_string(&file).expect("read golden file");
+        let golden = Json::parse(&text).expect("parse golden file");
+        if !golden.has("scene") {
+            continue;
+        }
+
+        let label = golden.str_or("label", "?");
+        let relative = golden.str_or("scene", "");
+        let golden_dir = file.parent().expect("golden directory");
+        let scene_path = {
+            let local = golden_dir.join(relative);
+            if local.is_file() {
+                local
+            } else {
+                repo_root().join(relative)
+            }
+        };
+
+        let scene = match create_scene(&scene_path) {
+            Ok(scene) => scene,
+            Err(error) => {
+                failures.push(format!("{label}: {error}"));
+                continue;
+            }
+        };
+        let render = match create_render() {
+            Ok(render) => render,
+            Err(error) => {
+                failures.push(format!("{label}: {error}"));
+                continue;
+            }
+        };
+
+        let mut worst = Worst {
+            world: 0.0,
+            positions: 0.0,
+            color: 0.0,
+            at: String::new(),
+        };
+        match replay_scene(&scene, &render, &golden, &mut worst, label) {
+            Ok(problems) => failures.extend(problems),
+            Err(error) => failures.push(format!("{label}: {error}")),
+        }
+        println!(
+            "{label} scene: max relative error world {:.2e}, positions {:.2e}",
+            worst.world, worst.positions
+        );
+        if worst.world > 1e-6 {
+            failures.push(format!(
+                "{label} scene: world error {:.2e} at {}",
+                worst.world, worst.at
+            ));
+        }
+        if worst.positions > 1e-6 {
+            failures.push(format!(
+                "{label} scene: position error {:.2e}",
+                worst.positions
+            ));
+        }
+        checked += 1;
+    }
+
+    assert!(checked > 0, "no scene golden files");
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
