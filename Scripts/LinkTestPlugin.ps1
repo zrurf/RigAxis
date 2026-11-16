@@ -1,31 +1,49 @@
+param(
+    [switch]$PaperZD
+)
+
 $ErrorActionPreference = "Stop"
 
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
-$pluginRoot = Join-Path $repo "Tests\RigAxisTest\Plugins\RigAxis"
 
-New-Item -ItemType Directory -Force $pluginRoot | Out-Null
-Copy-Item (Join-Path $repo "RigAxis.uplugin") (Join-Path $pluginRoot "RigAxis.uplugin") -Force
-
-foreach ($name in @("Source", "Content", "Resources", "Config"))
+function Link-Plugin([string]$Name, [string]$Source, [string]$PluginRoot)
 {
-    $target = Join-Path $repo $name
-    if (-not (Test-Path $target))
-    {
-        continue
-    }
+    New-Item -ItemType Directory -Force $PluginRoot | Out-Null
+    Copy-Item (Join-Path $Source "$Name.uplugin") (Join-Path $PluginRoot "$Name.uplugin") -Force
 
-    $link = Join-Path $pluginRoot $name
-    if (Test-Path $link)
+    foreach ($entry in @("Source", "Content", "Resources", "Config"))
     {
-        $item = Get-Item $link -Force
-        if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint))
+        $target = Join-Path $Source $entry
+        if (-not (Test-Path $target))
         {
-            throw "Refusing to replace non-link path: $link"
+            continue
         }
-        cmd /c rmdir $link | Out-Null
+
+        $link = Join-Path $PluginRoot $entry
+        if (Test-Path $link)
+        {
+            $item = Get-Item $link -Force
+            if (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint))
+            {
+                throw "Refusing to replace non-link path: $link"
+            }
+            cmd /c rmdir $link | Out-Null
+        }
+
+        New-Item -ItemType Junction -Path $link -Target $target | Out-Null
     }
 
-    New-Item -ItemType Junction -Path $link -Target $target | Out-Null
+    Write-Host "Prepared test plugin shim: $PluginRoot"
 }
 
-Write-Host "Prepared test plugin shim: $pluginRoot"
+Link-Plugin "RigAxis" $repo (Join-Path $repo "Tests\RigAxisTest\Plugins\RigAxis")
+
+if ($PaperZD)
+{
+    $adapter = Join-Path $repo "RigAxisPaperZD"
+    if (-not (Test-Path $adapter))
+    {
+        throw "Missing $adapter"
+    }
+    Link-Plugin "RigAxisPaperZD" $adapter (Join-Path $repo "Tests\RigAxisTest\Plugins\RigAxisPaperZD")
+}

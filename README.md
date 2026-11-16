@@ -30,6 +30,13 @@ RigAxis plays Rigby2D skeleton and scene exports inside Unreal Engine, with a Bl
 - `URigAxisSkeletonAsset` — skeleton bytes, atlas bytes, atlas page textures, and load status.
 - `URigAxisSceneAsset` — scene manifest plus the stage and actor skeleton assets.
 
+## PaperZD adapter (optional)
+
+`RigAxisPaperZD/` is a separate prototype plugin that drives a `URigAxisComponent` from PaperZD
+playback through a custom animation source, sequence, and playback handle. It requires PaperZD 2.2
+or newer and is not a dependency of the core plugin. See `RigAxisPaperZD/README.md` for setup and
+current limitations.
+
 ## Building
 
 Developed and tested with Unreal Engine 5.8, Visual Studio 2026, and Rust 1.99. Older engine versions are not verified yet.

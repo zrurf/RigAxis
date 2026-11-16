@@ -1,0 +1,29 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "RigAxis PaperZD Adapter",
+	"Description": "Drives RigAxis skeleton playback from PaperZD animation data.",
+	"Category": "Animation",
+	"CreatedBy": "RigAxis",
+	"EngineVersion": "5.8.0",
+	"CanContainContent": false,
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "RigAxisPaperZD",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "RigAxis",
+			"Enabled": true
+		},
+		{
+			"Name": "PaperZD",
+			"Enabled": true
+		}
+	]
+}
