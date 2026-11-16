@@ -1,0 +1,90 @@
+{
+  "skeleton": {"spine": "4.3"},
+  "bones": [
+    {"name": "root"},
+    {"name": "hip", "parent": "root", "y": 20},
+    {"name": "arm", "parent": "hip", "x": 20, "y": 40, "length": 40},
+    {"name": "hand", "parent": "arm", "x": 40, "length": 10}
+  ],
+  "slots": [
+    {"name": "body", "bone": "hip", "attachment": "body"},
+    {"name": "arm", "bone": "arm", "attachment": "arm"},
+    {"name": "hand", "bone": "hand", "attachment": "hand"}
+  ],
+  "skins": [
+    {
+      "name": "default",
+      "attachments": {
+        "body": {"body": {"type": "region", "x": 0, "y": 0, "width": 32, "height": 64}},
+        "arm": {"arm": {"type": "region", "x": 0, "y": 0, "width": 40, "height": 12}},
+        "hand": {"hand": {"type": "region", "x": 0, "y": 0, "width": 12, "height": 12}}
+      }
+    },
+    {
+      "name": "alt",
+      "attachments": {
+        "body": {"body_alt": {"type": "region", "x": 0, "y": 0, "width": 32, "height": 64}},
+        "arm": {"arm_alt": {"type": "region", "x": 0, "y": 0, "width": 40, "height": 12}},
+        "hand": {"hand_alt": {"type": "region", "x": 0, "y": 0, "width": 12, "height": 12}}
+      }
+    }
+  ],
+  "events": {
+    "beat": {"int": 1, "float": 0.25, "string": "low"},
+    "swish": {"int": 2, "float": 0.5, "string": "high"}
+  },
+  "animations": {
+    "idle": {
+      "bones": {
+        "hip": {
+          "translate": [
+            {"time": 0, "x": 0, "y": 0},
+            {"time": 0.6, "x": 0, "y": 4},
+            {"time": 1.2, "x": 0, "y": 0}
+          ]
+        },
+        "arm": {
+          "rotate": [
+            {"time": 0, "value": 0},
+            {"time": 0.6, "value": 8},
+            {"time": 1.2, "value": 0}
+          ]
+        }
+      },
+      "slots": {
+        "body": {
+          "color": [
+            {"time": 0, "color": "ffffffff"},
+            {"time": 0.6, "color": "ffd0d0ff"}
+          ]
+        }
+      },
+      "events": [
+        {"time": 0.6, "name": "beat"}
+      ]
+    },
+    "wave": {
+      "bones": {
+        "arm": {
+          "rotate": [
+            {"time": 0, "value": 0},
+            {"time": 0.3, "value": -45},
+            {"time": 0.6, "value": -20},
+            {"time": 0.9, "value": 0}
+          ]
+        },
+        "hand": {
+          "rotate": [
+            {"time": 0, "value": 0},
+            {"time": 0.3, "value": 20},
+            {"time": 0.6, "value": -10},
+            {"time": 0.9, "value": 0}
+          ]
+        }
+      },
+      "events": [
+        {"time": 0.3, "name": "swish"}
+      ]
+    }
+  }
+}
