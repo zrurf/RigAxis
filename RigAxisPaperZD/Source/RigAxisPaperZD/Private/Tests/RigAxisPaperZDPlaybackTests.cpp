@@ -86,6 +86,28 @@ bool FRigAxisPaperZDPlaybackTest::RunTest(const FString& Parameters)
         TEXT("second time sampled"),
         Transform.GetLocation().Equals(FVector(7.5f, 0.0f, 0.0f), 0.01f));
 
+    TStrongObjectPtr<URigAxisComponent> LateComponent(NewObject<URigAxisComponent>());
+    TStrongObjectPtr<URigAxisPaperZDPlaybackHandle> LateHandle(
+        NewObject<URigAxisPaperZDPlaybackHandle>());
+    LateHandle->ConfigureRenderComponent(LateComponent.Get());
+
+    FPaperZDAnimationPlaybackData LatePlayback;
+    LatePlayback.WeightedAnimations.Add(
+        FPaperZDWeightedAnimation(Sequence.Get(), 0.25f, 1.0f));
+    LateHandle->UpdateRenderPlayback(LateComponent.Get(), LatePlayback);
+
+    LateComponent->SkeletonAsset = Asset.Get();
+    LateComponent->PixelsPerUnrealUnit = 1.0f;
+    LateHandle->UpdateRenderPlayback(LateComponent.Get(), LatePlayback);
+
+    FTransform LateTransform;
+    TestTrue(
+        TEXT("late asset transform"),
+        LateComponent->GetBoneWorldTransform(TEXT("bone"), LateTransform));
+    TestTrue(
+        TEXT("late asset retry"),
+        LateTransform.GetLocation().Equals(FVector(2.5f, 0.0f, 0.0f), 0.01f));
+
     return true;
 }
 

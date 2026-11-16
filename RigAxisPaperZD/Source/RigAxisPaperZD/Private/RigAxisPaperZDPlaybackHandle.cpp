@@ -55,9 +55,14 @@ void URigAxisPaperZDPlaybackHandle::UpdateRenderPlayback(
         return;
     }
 
-    if (CurrentSequence.Get() != Selected)
+    if (CurrentSequence.Get() != Selected
+        || RigAxis->GetCurrentAnimation(0) != Selected->AnimationName)
     {
-        RigAxis->Play(Selected->AnimationName, true, 0.0f);
+        if (!RigAxis->Play(Selected->AnimationName, true, 0.0f))
+        {
+            CurrentSequence.Reset();
+            return;
+        }
         CurrentSequence = Selected;
     }
     RigAxis->SetTrackTime(0, PlaybackTime);

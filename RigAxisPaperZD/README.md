@@ -19,6 +19,6 @@ Prototype. It validates PaperZD's animation source and playback-handle extension
 
 ## Limitations
 
-- No editor asset factory yet; create the animation source and sequences in C++ or Blueprint.
+- No editor asset factory yet; create the animation source and sequences in C++ (or add a factory later).
 - Weighted blending, animation layers, skins, and PaperZD notifies are not mapped.
 - The adapter drives one RigAxis track; it does not replace PaperZD rendering for flipbooks.
