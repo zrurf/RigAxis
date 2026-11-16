@@ -5,21 +5,29 @@
 
 class UMaterialInterface;
 
+/** Selects the plane a skeleton mesh is built in. */
 UENUM(BlueprintType)
 enum class ERigAxisPlane : uint8
 {
+    /** XZ plane, facing -Y. */
     XZ UMETA(DisplayName = "XZ (side view)"),
+    /** XY plane, facing +Z. */
     XY UMETA(DisplayName = "XY (top-down)")
 };
 
+/** Selects the clock used to advance playback. */
 UENUM(BlueprintType)
 enum class ERigAxisUpdateMode : uint8
 {
+    /** Advances with the game delta time. */
     Scaled,
+    /** Advances with real time, ignoring time dilation. */
     Unscaled,
+    /** Does not advance automatically; call Advance(). */
     Manual
 };
 
+/** Blend mode of an atlas attachment. */
 UENUM(BlueprintType)
 enum class ERigAxisBlend : uint8
 {
@@ -29,6 +37,7 @@ enum class ERigAxisBlend : uint8
     Screen = 3
 };
 
+/** Animation event delivered by URigAxisComponent. */
 USTRUCT(BlueprintType)
 struct FRigAxisAnimationEvent
 {
@@ -68,6 +77,7 @@ struct FRigAxisAnimationEvent
     float Balance = 0.0f;
 };
 
+/** Materials per blend mode. Unset entries use the plugin default or MeshMaterial. */
 USTRUCT(BlueprintType)
 struct FRigAxisMaterialSet
 {

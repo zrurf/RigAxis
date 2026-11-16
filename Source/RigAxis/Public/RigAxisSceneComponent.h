@@ -21,6 +21,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
     FName,
     Shot);
 
+/// Plays a URigAxisSceneAsset, including its stage, actors and shots.
+/// PixelsPerUnrealUnit and Plane select the scene scale and projection plane.
 UCLASS(ClassGroup = (RigAxis), meta = (BlueprintSpawnableComponent))
 class RIGAXIS_API URigAxisSceneComponent : public UMeshComponent
 {
@@ -60,15 +62,18 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
     FRigAxisShotFinishedDelegate OnShotFinished;
 
+    /// Starts a shot. bInLoop repeats the shot until another shot starts.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void PlayShot(FName Shot, bool bInLoop = false);
 
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void Stop();
 
+    /// Sets the scene time in seconds.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void SetTime(float Time);
 
+    /// Advances the scene by DeltaSeconds.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void Advance(float DeltaSeconds);
 
@@ -81,12 +86,15 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     FName GetCurrentShot() const;
 
+    /// Returns the scene camera bone in world space, or the component transform when no scene is loaded.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Camera")
     FTransform GetCameraWorldTransform() const;
 
+    /// Returns the camera bone's uniform scale.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Camera")
     float GetCameraZoom() const;
 
+    /// Returns an actor bone in world space. Actor is the scene actor id.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
     bool GetActorBoneWorldTransform(FName Actor, FName Bone, FTransform& OutTransform) const;
 

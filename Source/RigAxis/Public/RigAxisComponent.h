@@ -28,6 +28,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
     const FRigAxisAnimationEvent&,
     Event);
 
+/// Plays a URigAxisSkeletonAsset and renders it with a custom scene proxy.
+/// PixelsPerUnrealUnit converts skeleton pixels to Unreal units; Plane selects the projection plane.
 UCLASS(ClassGroup = (RigAxis), meta = (BlueprintSpawnableComponent))
 class RIGAXIS_API URigAxisComponent : public UMeshComponent
 {
@@ -91,12 +93,15 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "RigAxis|Events")
     FRigAxisAnimationEventDelegate OnAnimationEvent;
 
+    /// Starts an animation on track 0.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     bool Play(FName Animation, bool bInLoop = true, float MixDuration = 0.0f);
 
+    /// Replaces the animation on a track. MixDuration crossfades from the previous animation.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     bool SetAnimation(int32 Track, FName Animation, bool bInLoop, float MixDuration = 0.0f);
 
+    /// Queues an animation on a track. Delay < 0 starts it at the current animation's end.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     bool QueueAnimation(int32 Track, FName Animation, bool bInLoop, float MixDuration = 0.0f, float Delay = -1.0f);
 
@@ -109,18 +114,22 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void SetSpeed(float Speed);
 
+    /// Sets the local time of a track, in seconds.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void SetTrackTime(int32 Track, float Time);
 
+    /// Advances playback manually. Use with UpdateMode = Manual.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void Advance(float DeltaSeconds);
 
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
     FVector GetBoneWorldPosition(FName Bone);
 
+    /// Returns a bone transform in world space, including the component transform.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
     bool GetBoneWorldTransform(FName Bone, FTransform& OutTransform);
 
+    /// Selects a skin. Returns false when the skin does not exist.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Pose")
     bool SetSkin(FName Skin);
 

@@ -7,6 +7,7 @@
 
 class UTexture2D;
 
+/// Imported skeleton and atlas data. Runtime data is parsed on first use and rebuilt after changes.
 UCLASS(BlueprintType)
 class RIGAXIS_API URigAxisSkeletonAsset : public UDataAsset
 {
@@ -31,10 +32,14 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "RigAxis")
     TArray<FString> AdditionalSourceFiles;
 
+    /// Returns the parsed runtime data, parsing it on first use.
     TSharedPtr<FRigAxisSkeletonData> GetData() const;
+    /// Increments whenever the runtime data is rebuilt.
     int32 GetVersion() const { return Version; }
+    /// Returns the parse error when GetData() is invalid.
     const FString& GetLoadError() const { return LoadError; }
 
+    /// Rebuilds the runtime data from the stored bytes and bumps GetVersion().
     void RebuildData() const;
 
 #if WITH_EDITOR

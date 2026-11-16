@@ -765,6 +765,7 @@ pub unsafe extern "C" fn rigaxis_pose_set_skin(
     true
 }
 
+/// Returns false when `bone` is out of range.
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_pose_bone_world(
     pose: *const RigAxisPose,
@@ -1048,6 +1049,7 @@ pub unsafe extern "C" fn rigaxis_state_event_count(state: *const RigAxisState) -
     state_ref(state).map_or(0, |state| state.events.len() as u32)
 }
 
+/// Copies event `index`. String pointers stay valid until the state is mutated or freed.
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_state_event_at(
     state: *const RigAxisState,
@@ -1214,6 +1216,7 @@ pub unsafe extern "C" fn rigaxis_render_batch_count(render: *const RigAxisRender
     render_ref(render).map_or(0, |render| render.batches.len() as u32)
 }
 
+/// Copies batch metadata. Vertex and index pointers stay valid until the next build or free.
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_render_batch_at(
     render: *const RigAxisRender,
@@ -1248,6 +1251,7 @@ fn atlas_from_bytes(bytes: &[u8]) -> Result<Atlas, String> {
     Ok(Atlas::parse(text))
 }
 
+/// Creates a scene from a manifest and preloaded sources. Sources are matched by their `path`.
 #[no_mangle]
 pub unsafe extern "C" fn rigaxis_scene_create(
     manifest: *const u8,

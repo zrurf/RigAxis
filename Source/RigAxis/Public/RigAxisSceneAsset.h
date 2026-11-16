@@ -6,6 +6,7 @@
 
 class URigAxisSkeletonAsset;
 
+/// Imported scene manifest and its stage and actor skeleton assets.
 UCLASS(BlueprintType)
 class RIGAXIS_API URigAxisSceneAsset : public UDataAsset
 {
@@ -30,5 +31,6 @@ public:
     UPROPERTY(VisibleAnywhere, Category = "RigAxis")
     TArray<FString> AdditionalSourceFiles;
 
+    /// Returns the skeleton asset for a scene actor id, or null.
     URigAxisSkeletonAsset* FindActorSkeleton(const FString& ActorId) const;
 };
