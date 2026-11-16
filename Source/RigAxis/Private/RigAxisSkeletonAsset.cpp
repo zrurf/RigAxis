@@ -19,6 +19,63 @@ TSharedPtr<FRigAxisSkeletonData> URigAxisSkeletonAsset::GetData() const
     return Data;
 }
 
+TArray<FName> URigAxisSkeletonAsset::GetBoneNames() const
+{
+    TArray<FName> Names;
+    const TSharedPtr<FRigAxisSkeletonData> Skeleton = GetData();
+    if (!Skeleton.IsValid())
+    {
+        return Names;
+    }
+
+    Names.Reserve(Skeleton->GetBoneNames().Num());
+    for (const FString& Name : Skeleton->GetBoneNames())
+    {
+        Names.Add(FName(*Name));
+    }
+    return Names;
+}
+
+TArray<FName> URigAxisSkeletonAsset::GetAnimationNames() const
+{
+    TArray<FName> Names;
+    const TSharedPtr<FRigAxisSkeletonData> Skeleton = GetData();
+    if (!Skeleton.IsValid())
+    {
+        return Names;
+    }
+
+    Names.Reserve(Skeleton->GetAnimationNames().Num());
+    for (const FString& Name : Skeleton->GetAnimationNames())
+    {
+        Names.Add(FName(*Name));
+    }
+    return Names;
+}
+
+TArray<FName> URigAxisSkeletonAsset::GetSkinNames() const
+{
+    TArray<FName> Names;
+    const TSharedPtr<FRigAxisSkeletonData> Skeleton = GetData();
+    if (!Skeleton.IsValid())
+    {
+        return Names;
+    }
+
+    Names.Reserve(Skeleton->GetSkinNames().Num());
+    for (const FString& Name : Skeleton->GetSkinNames())
+    {
+        Names.Add(FName(*Name));
+    }
+    return Names;
+}
+
+float URigAxisSkeletonAsset::GetAnimationDuration(FName Animation) const
+{
+    const TSharedPtr<FRigAxisSkeletonData> Skeleton = GetData();
+    return Skeleton.IsValid() ? Skeleton->GetAnimationDuration(Animation) : 0.0f;
+}
+
 void URigAxisSkeletonAsset::RebuildData() const
 {
     Data.Reset();

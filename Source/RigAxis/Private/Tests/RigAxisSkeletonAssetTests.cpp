@@ -8,7 +8,7 @@
 
 namespace
 {
-    const ANSICHAR* MinimalSkeleton = R"JSON({"skeleton":{"spine":"4.3"},"bones":[{"name":"root"},{"name":"child","parent":"root","x":10}],"slots":[],"skins":[],"animations":{}})JSON";
+    const ANSICHAR* MinimalSkeleton = R"JSON({"skeleton":{"spine":"4.3"},"bones":[{"name":"root"},{"name":"child","parent":"root","x":10}],"slots":[],"skins":[],"animations":{"move":{"bones":{"child":{"translate":[{"time":0,"x":0,"y":0},{"time":1,"x":10,"y":0}]}}}}})JSON";
     const ANSICHAR* MinimalAtlas = "minimal.png\nsize: 64,64\nformat: RGBA8888\nfilter: Linear,Linear\nrepeat: none\n";
 }
 
@@ -40,8 +40,21 @@ bool FRigAxisSkeletonAssetTest::RunTest(const FString& Parameters)
     }
     TestEqual(TEXT("find child"), Data->FindBone(FName(TEXT("child"))), 1);
     TestEqual(TEXT("find missing bone"), Data->FindBone(FName(TEXT("missing"))), INDEX_NONE);
-    TestEqual(TEXT("animation count"), Data->GetAnimationNames().Num(), 0);
+    TestEqual(TEXT("animation count"), Data->GetAnimationNames().Num(), 1);
+    TestEqual(TEXT("find animation"), Data->FindAnimation(FName(TEXT("move"))), 0);
+    TestTrue(
+        TEXT("animation duration"),
+        FMath::IsNearlyEqual(Data->GetAnimationDuration(TEXT("move")), 1.0f, 1e-4f));
     TestEqual(TEXT("skin count"), Data->GetSkinNames().Num(), 0);
+
+    const TArray<FName> AssetBones = Asset->GetBoneNames();
+    TestEqual(TEXT("asset bone count"), AssetBones.Num(), 2);
+    const TArray<FName> AssetAnimations = Asset->GetAnimationNames();
+    TestEqual(TEXT("asset animation count"), AssetAnimations.Num(), 1);
+    TestEqual(TEXT("asset skin count"), Asset->GetSkinNames().Num(), 0);
+    TestTrue(
+        TEXT("asset animation duration"),
+        FMath::IsNearlyEqual(Asset->GetAnimationDuration(TEXT("move")), 1.0f, 1e-4f));
 
     const TArray<FString>& PageNames = Data->GetAtlasPageNames();
     TestEqual(TEXT("atlas pages"), PageNames.Num(), 1);

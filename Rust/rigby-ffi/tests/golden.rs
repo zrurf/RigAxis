@@ -812,7 +812,10 @@ fn replay_scene(
 
             let actors = expected.get("actors").as_array();
             if actors.iter().any(|actor| actor.get("quads").is_array()) {
-                unsafe { rigaxis_scene_build_render(scene.0, render.0) };
+                let status = unsafe { rigaxis_scene_build_render(scene.0, render.0) };
+                if status != RigAxisStatus::Ok {
+                    return Err(format!("{at}: scene build failed: {}", last_error()));
+                }
             }
             for actor in actors {
                 let id = actor.str_or("id", "");

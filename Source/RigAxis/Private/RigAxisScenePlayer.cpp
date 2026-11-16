@@ -118,6 +118,14 @@ void FRigAxisScenePlayer::SetTime(double Time)
     }
 }
 
+void FRigAxisScenePlayer::ResetPhysics()
+{
+    if (Scene)
+    {
+        rigaxis_scene_reset_physics(Scene);
+    }
+}
+
 double FRigAxisScenePlayer::GetDuration() const
 {
     return Scene ? rigaxis_scene_duration(Scene) : 0.0;

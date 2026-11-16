@@ -518,6 +518,16 @@ pub unsafe extern "C" fn rigaxis_skeleton_animation_name(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn rigaxis_skeleton_animation_duration(
+    skeleton: *const RigAxisSkeleton,
+    index: u32,
+) -> f64 {
+    skeleton_ref(skeleton)
+        .and_then(|skeleton| skeleton.data.animations.get(index as usize))
+        .map_or(0.0, |animation| animation.duration)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn rigaxis_skeleton_find_animation(
     skeleton: *const RigAxisSkeleton,
     name: *const c_char,
@@ -1014,6 +1024,26 @@ pub unsafe extern "C" fn rigaxis_state_set_track_time(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_track_time(
+    state: *const RigAxisState,
+    track: u32,
+) -> f64 {
+    state_ref(state)
+        .and_then(|state| state.state.current(track as usize))
+        .map_or(0.0, |entry| entry.time)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rigaxis_state_current_animation(
+    state: *const RigAxisState,
+    track: u32,
+) -> i32 {
+    state_ref(state)
+        .and_then(|state| state.state.current(track as usize))
+        .map_or(-1, |entry| entry.animation as i32)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn rigaxis_state_update(
     state: *mut RigAxisState,
     skeleton: *const RigAxisSkeleton,
@@ -1425,6 +1455,20 @@ pub unsafe extern "C" fn rigaxis_scene_set_time(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn rigaxis_scene_reset_physics(scene: *mut RigAxisScene) {
+    guard(|| {
+        let Some(scene) = scene_mut(scene) else {
+            return Err("invalid scene".to_string());
+        };
+        scene.player.pose.reset_physics();
+        for character in &mut scene.player.characters {
+            character.pose.reset_physics();
+        }
+        Ok(())
+    });
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn rigaxis_scene_duration(scene: *const RigAxisScene) -> f64 {
     scene_ref(scene).map_or(0.0, |scene| scene.player.duration())
 }
@@ -1624,7 +1668,10 @@ pub unsafe extern "C" fn rigaxis_scene_camera_world(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn rigaxis_scene_build_render(scene: *mut RigAxisScene, render: *mut RigAxisRender) {
+pub unsafe extern "C" fn rigaxis_scene_build_render(
+    scene: *mut RigAxisScene,
+    render: *mut RigAxisRender,
+) -> RigAxisStatus {
     clear_error();
     guard(|| {
         let Some(scene) = scene_mut(scene) else {
@@ -1678,7 +1725,7 @@ pub unsafe extern "C" fn rigaxis_scene_build_render(scene: *mut RigAxisScene, re
         }
         update_batch_views(render);
         Ok(())
-    });
+    })
 }
 
 #[cfg(test)]
@@ -1862,7 +1909,13 @@ mod tests {
                 0.0,
                 ptr::null_mut()
             ));
+            assert_eq!(rigaxis_skeleton_animation_count(skeleton), 2);
+            assert!(
+                (rigaxis_skeleton_animation_duration(skeleton, 0) - 1.0).abs() < 1e-9
+            );
             rigaxis_state_update(state, skeleton, 0.5);
+            assert_eq!(rigaxis_state_current_animation(state, 0), 0);
+            assert!((rigaxis_state_track_time(state, 0) - 0.5).abs() < 1e-9);
             rigaxis_state_apply(state, skeleton, pose);
 
             let mut affine = RigAxisAffine {
@@ -2275,7 +2328,10 @@ mod tests {
                 rigaxis_render_create(&mut render) as i32,
                 RigAxisStatus::Ok as i32
             );
-            rigaxis_scene_build_render(scene, render);
+            assert_eq!(
+                rigaxis_scene_build_render(scene, render) as i32,
+                RigAxisStatus::Ok as i32
+            );
             assert!(rigaxis_render_batch_count(render) >= 1);
 
             let mut batch = RigAxisBatch {
@@ -2292,6 +2348,7 @@ mod tests {
             assert!(batch.vertex_count > 0);
             assert!(batch.index_count > 0);
 
+            rigaxis_scene_reset_physics(scene);
             rigaxis_render_free(render);
             rigaxis_scene_free(scene);
         }

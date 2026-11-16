@@ -70,6 +70,33 @@ bool FRigAxisBoneTransformTest::RunTest(const FString& Parameters)
         TEXT("world position"),
         Component->GetBoneWorldPosition(TEXT("bone")).Equals(Transform.GetLocation(), 0.01f));
 
+    Component->SetTrackTime(0, 0.5f);
+    TestTrue(
+        TEXT("seek updates pose"),
+        Component->GetBoneWorldPosition(TEXT("bone")).Equals(FVector(5.0f, 0.0f, 0.0f), 0.01f));
+    TestTrue(TEXT("track time"), FMath::IsNearlyEqual(Component->GetTrackTime(0), 0.5f, 1e-4f));
+    TestEqual(TEXT("current animation"), Component->GetCurrentAnimation(0), FName(TEXT("move")));
+    TestTrue(
+        TEXT("animation duration"),
+        FMath::IsNearlyEqual(Component->GetAnimationDuration(TEXT("move")), 1.0f, 1e-4f));
+    TestTrue(
+        TEXT("current animation duration"),
+        FMath::IsNearlyEqual(Component->GetCurrentAnimationDuration(0), 1.0f, 1e-4f));
+
+    TestTrue(TEXT("set track alpha"), Component->SetTrackAlpha(0, 0.0f));
+    TestTrue(
+        TEXT("zero alpha uses setup"),
+        Component->GetBoneWorldPosition(TEXT("bone")).Equals(FVector::ZeroVector, 0.01f));
+    TestTrue(TEXT("restore track alpha"), Component->SetTrackAlpha(0, 1.0f));
+
+    TestTrue(TEXT("set time scale"), Component->SetTrackTimeScale(0, 2.0f));
+    Component->SetTrackTime(0, 0.0f);
+    Component->Advance(0.25f);
+    TestTrue(
+        TEXT("time scale applied"),
+        Component->GetBoneWorldPosition(TEXT("bone")).Equals(FVector(5.0f, 0.0f, 0.0f), 0.01f));
+    Component->SetTrackTimeScale(0, 1.0f);
+
     TestFalse(TEXT("missing bone"), Component->GetBoneWorldTransform(TEXT("missing"), Transform));
 
     Component->bFlipX = true;

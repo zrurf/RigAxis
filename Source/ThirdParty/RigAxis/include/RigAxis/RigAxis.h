@@ -126,6 +126,8 @@ const char* rigaxis_skeleton_bone_name(const RigAxisSkeleton* skeleton, uint32_t
 int32_t rigaxis_skeleton_find_bone(const RigAxisSkeleton* skeleton, const char* name);
 uint32_t rigaxis_skeleton_animation_count(const RigAxisSkeleton* skeleton);
 const char* rigaxis_skeleton_animation_name(const RigAxisSkeleton* skeleton, uint32_t index);
+/** Returns the animation duration in seconds, or 0 when the index is invalid. */
+double rigaxis_skeleton_animation_duration(const RigAxisSkeleton* skeleton, uint32_t index);
 int32_t rigaxis_skeleton_find_animation(const RigAxisSkeleton* skeleton, const char* name);
 uint32_t rigaxis_skeleton_skin_count(const RigAxisSkeleton* skeleton);
 const char* rigaxis_skeleton_skin_name(const RigAxisSkeleton* skeleton, uint32_t index);
@@ -169,6 +171,10 @@ void rigaxis_state_stop(RigAxisState* state);
 bool rigaxis_state_set_track_alpha(RigAxisState* state, uint32_t track, double alpha);
 bool rigaxis_state_set_track_time_scale(RigAxisState* state, uint32_t track, double scale);
 bool rigaxis_state_set_track_time(RigAxisState* state, uint32_t track, double time);
+/** Returns the track time in seconds, or 0 when the track is empty. */
+double rigaxis_state_track_time(const RigAxisState* state, uint32_t track);
+/** Returns the current animation index, or -1 when the track is empty. */
+int32_t rigaxis_state_current_animation(const RigAxisState* state, uint32_t track);
 void rigaxis_state_update(RigAxisState* state, const RigAxisSkeleton* skeleton, double delta_seconds);
 void rigaxis_state_apply(RigAxisState* state, const RigAxisSkeleton* skeleton, RigAxisPose* pose);
 uint32_t rigaxis_state_event_count(const RigAxisState* state);
@@ -189,6 +195,8 @@ void rigaxis_scene_free(RigAxisScene* scene);
 void rigaxis_scene_play(RigAxisScene* scene, const char* shot, bool looping);
 void rigaxis_scene_update(RigAxisScene* scene, double delta_seconds);
 void rigaxis_scene_set_time(RigAxisScene* scene, double time, double physics_delta);
+/** Resets physics for the stage and every actor at the current scene time. */
+void rigaxis_scene_reset_physics(RigAxisScene* scene);
 double rigaxis_scene_duration(const RigAxisScene* scene);
 double rigaxis_scene_time(const RigAxisScene* scene);
 const char* rigaxis_scene_current_shot(const RigAxisScene* scene);
@@ -212,7 +220,8 @@ uint32_t rigaxis_scene_layer_count(const RigAxisScene* scene);
 bool rigaxis_scene_layer_at(const RigAxisScene* scene, uint32_t layer, uint32_t* out_slot, int32_t* out_actor);
 
 bool rigaxis_scene_camera_world(const RigAxisScene* scene, RigAxisAffine* out);
-void rigaxis_scene_build_render(RigAxisScene* scene, RigAxisRender* render);
+/** Builds the scene's stage and actor batches into the render handle. */
+RigAxisStatus rigaxis_scene_build_render(RigAxisScene* scene, RigAxisRender* render);
 
 #ifdef __cplusplus
 }

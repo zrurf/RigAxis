@@ -48,6 +48,9 @@ public:
     float TimeScale = 1.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
+    ERigAxisUpdateMode UpdateMode = ERigAxisUpdateMode::Scaled;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
     float PixelsPerUnrealUnit = 1.0f;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RigAxis")
@@ -73,9 +76,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void SetTime(float Time);
 
-    /// Advances the scene by DeltaSeconds.
+    /// Advances the scene by DeltaSeconds. Use with UpdateMode = Manual to avoid double stepping.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     void Advance(float DeltaSeconds);
+
+    /// Resets physics for the stage and every actor without changing the scene time.
+    UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
+    void ResetPhysics();
 
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     float GetDuration() const;
@@ -85,6 +92,18 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Playback")
     FName GetCurrentShot() const;
+
+    /// Returns the number of actors declared by the scene.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Scene")
+    int32 GetActorCount() const;
+
+    /// Returns the id of a scene actor, or None when the index is invalid.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Scene")
+    FName GetActorId(int32 Actor) const;
+
+    /// Returns the display name of a scene actor, or None when the index is invalid.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Scene")
+    FName GetActorName(int32 Actor) const;
 
     /// Returns the scene camera bone in world space, or the component transform when no scene is loaded.
     UFUNCTION(BlueprintCallable, Category = "RigAxis|Camera")

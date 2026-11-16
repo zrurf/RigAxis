@@ -163,6 +163,49 @@ bool FRigAxisPlayer::SetTrackTime(int32 Track, float Time)
         && rigaxis_state_set_track_time(State, static_cast<uint32>(Track), Time);
 }
 
+float FRigAxisPlayer::GetTrackTime(int32 Track) const
+{
+    if (!IsValid() || Track < 0)
+    {
+        return 0.0f;
+    }
+    return static_cast<float>(
+        rigaxis_state_track_time(State, static_cast<uint32>(Track)));
+}
+
+FName FRigAxisPlayer::GetCurrentAnimation(int32 Track) const
+{
+    if (!IsValid() || Track < 0 || !Data.IsValid())
+    {
+        return NAME_None;
+    }
+
+    const int32 Index = rigaxis_state_current_animation(
+        State,
+        static_cast<uint32>(Track));
+    const TArray<FString>& Names = Data->GetAnimationNames();
+    return Names.IsValidIndex(Index) ? FName(*Names[Index]) : NAME_None;
+}
+
+float FRigAxisPlayer::GetAnimationDuration(FName Animation) const
+{
+    return Data.IsValid() ? Data->GetAnimationDuration(Animation) : 0.0f;
+}
+
+float FRigAxisPlayer::GetCurrentAnimationDuration(int32 Track) const
+{
+    if (!IsValid() || Track < 0 || !Data.IsValid())
+    {
+        return 0.0f;
+    }
+
+    const int32 Index = rigaxis_state_current_animation(
+        State,
+        static_cast<uint32>(Track));
+    const TArray<float>& Durations = Data->GetAnimationDurations();
+    return Durations.IsValidIndex(Index) ? Durations[Index] : 0.0f;
+}
+
 void FRigAxisPlayer::SetSpeed(float Speed)
 {
     if (IsValid())

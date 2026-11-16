@@ -8,8 +8,11 @@ RigAxis plays Rigby2D skeleton and scene exports inside Unreal Engine, with a Bl
 
 - Skeleton and atlas loading (`.skel`, skeleton `.json`, `.atlas`).
 - Track playback with crossfades, queues, speed, and manual time control.
+- Track timing and introspection: local time, current animation, duration, alpha, and time scale.
+- Skeleton introspection: bone, animation, and skin names plus animation durations.
 - Animation events exposed as Blueprint delegates.
 - Skins and physics reset.
+- Scene manual stepping, physics reset, and actor id/name enumeration.
 - Custom `FPrimitiveSceneProxy` renderer with per-page, per-blend, and two-color tint materials.
 - Default unlit sprite materials for normal, additive, multiply, and screen blending.
 - Editor importers and reimport for skeleton and scene assets.

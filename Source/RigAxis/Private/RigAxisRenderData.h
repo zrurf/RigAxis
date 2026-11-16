@@ -33,7 +33,7 @@ public:
     void Destroy();
 
     bool Build(const FRigAxisSkeletonData& Data, const FRigAxisPlayer& Player, const FLinearColor& Tint);
-    bool BuildScene(RigAxisScene* Scene);
+    bool BuildScene(RigAxisScene* Scene, FString& OutError);
 
     int32 GetBatchCount() const { return Batches.Num(); }
     const TArray<FRigAxisRenderBatch>& GetBatches() const { return Batches; }

@@ -39,6 +39,22 @@ public:
     /// Returns the parse error when GetData() is invalid.
     const FString& GetLoadError() const { return LoadError; }
 
+    /// Returns the bone names, or an empty array when the asset has no valid data.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Skeleton")
+    TArray<FName> GetBoneNames() const;
+
+    /// Returns the animation names, or an empty array when the asset has no valid data.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Skeleton")
+    TArray<FName> GetAnimationNames() const;
+
+    /// Returns the skin names, or an empty array when the asset has no valid data.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Skeleton")
+    TArray<FName> GetSkinNames() const;
+
+    /// Returns the animation duration in seconds, or 0 when the animation is missing.
+    UFUNCTION(BlueprintPure, Category = "RigAxis|Skeleton")
+    float GetAnimationDuration(FName Animation) const;
+
     /// Rebuilds the runtime data from the stored bytes and bumps GetVersion().
     void RebuildData() const;
 

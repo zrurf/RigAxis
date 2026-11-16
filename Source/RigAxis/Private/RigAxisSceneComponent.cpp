@@ -2,6 +2,7 @@
 
 #include "Engine/Texture2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Misc/App.h"
 #include "Misc/Crc.h"
 #include "RigAxisLog.h"
 #include "RigAxisMeshBuilder.h"
@@ -57,6 +58,7 @@ struct FRigAxisSceneComponentImpl
     bool bPlaying = false;
     bool bLooping = false;
     bool bShotFinished = false;
+    bool bBuildErrorLogged = false;
 };
 
 URigAxisSceneComponent::URigAxisSceneComponent()
@@ -132,14 +134,16 @@ void URigAxisSceneComponent::TickComponent(
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
     EnsureScene();
-    if (!Impl || !Impl->Player.IsValid())
+    if (!Impl || !Impl->Player.IsValid() || UpdateMode == ERigAxisUpdateMode::Manual)
     {
         return;
     }
 
     if (Impl->bPlaying)
     {
-        const double Seconds = static_cast<double>(DeltaTime) * TimeScale;
+        const double Seconds = (UpdateMode == ERigAxisUpdateMode::Unscaled
+            ? FApp::GetDeltaTime()
+            : DeltaTime) * TimeScale;
         if (Seconds > 0.0)
         {
             Impl->Player->Update(Seconds);
@@ -218,6 +222,7 @@ void URigAxisSceneComponent::EnsureScene()
     Impl->BoundAsset = SceneAsset;
     Impl->SceneVersion = Version;
     Impl->bShotFinished = false;
+    Impl->bBuildErrorLogged = false;
 }
 
 void URigAxisSceneComponent::DestroyScene()
@@ -249,6 +254,7 @@ void URigAxisSceneComponent::DestroyScene()
     Impl->bPlaying = false;
     Impl->bLooping = false;
     Impl->bShotFinished = false;
+    Impl->bBuildErrorLogged = false;
 
     SectionMaterials.Reset();
     BaseMaterials.Reset();
@@ -267,10 +273,17 @@ void URigAxisSceneComponent::UpdateScene()
         return;
     }
 
-    if (!Impl->RenderData->BuildScene(Impl->Player->GetScene()))
+    FString BuildError;
+    if (!Impl->RenderData->BuildScene(Impl->Player->GetScene(), BuildError))
     {
+        if (!Impl->bBuildErrorLogged)
+        {
+            Impl->bBuildErrorLogged = true;
+            UE_LOG(LogRigAxis, Error, TEXT("%s: %s"), *GetPathName(), *BuildError);
+        }
         return;
     }
+    Impl->bBuildErrorLogged = false;
 
     FRigAxisMeshBuilder::Build(
         *Impl->RenderData,
@@ -571,6 +584,18 @@ void URigAxisSceneComponent::Advance(float DeltaSeconds)
     UpdateScene();
 }
 
+void URigAxisSceneComponent::ResetPhysics()
+{
+    EnsureScene();
+    if (!Impl || !Impl->Player.IsValid())
+    {
+        return;
+    }
+
+    Impl->Player->ResetPhysics();
+    UpdateScene();
+}
+
 float URigAxisSceneComponent::GetDuration() const
 {
     return Impl && Impl->Player.IsValid()
@@ -590,6 +615,33 @@ FName URigAxisSceneComponent::GetCurrentShot() const
     return Impl && Impl->Player.IsValid()
         ? FName(*Impl->Player->GetCurrentShot())
         : NAME_None;
+}
+
+int32 URigAxisSceneComponent::GetActorCount() const
+{
+    return Impl && Impl->Player.IsValid()
+        ? static_cast<int32>(Impl->Player->GetActorCount())
+        : 0;
+}
+
+FName URigAxisSceneComponent::GetActorId(int32 Actor) const
+{
+    if (!Impl || !Impl->Player.IsValid() || Actor < 0)
+    {
+        return NAME_None;
+    }
+    const FString Id = Impl->Player->GetActorId(static_cast<uint32>(Actor));
+    return Id.IsEmpty() ? NAME_None : FName(*Id);
+}
+
+FName URigAxisSceneComponent::GetActorName(int32 Actor) const
+{
+    if (!Impl || !Impl->Player.IsValid() || Actor < 0)
+    {
+        return NAME_None;
+    }
+    const FString Name = Impl->Player->GetActorName(static_cast<uint32>(Actor));
+    return Name.IsEmpty() ? NAME_None : FName(*Name);
 }
 
 int32 URigAxisSceneComponent::FindActorIndex(FName Actor) const

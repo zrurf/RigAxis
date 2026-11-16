@@ -641,13 +641,86 @@ void URigAxisComponent::SetSpeed(float Speed)
     }
 }
 
+void URigAxisComponent::ApplyCurrentPose()
+{
+    if (!Impl
+        || !Impl->Player.IsValid()
+        || !Impl->RenderData.IsValid()
+        || !Impl->Data.IsValid())
+    {
+        return;
+    }
+
+    Impl->Player->Apply();
+    if (Impl->RenderData->Build(*Impl->Data, *Impl->Player, Tint))
+    {
+        UpdateMesh();
+    }
+}
+
 void URigAxisComponent::SetTrackTime(int32 Track, float Time)
 {
     EnsurePlayer();
-    if (Impl && Impl->Player.IsValid())
+    if (!Impl || !Impl->Player.IsValid())
     {
-        Impl->Player->SetTrackTime(Track, Time);
+        return;
     }
+    if (!Impl->Player->SetTrackTime(Track, Time))
+    {
+        return;
+    }
+    ApplyCurrentPose();
+}
+
+bool URigAxisComponent::SetTrackAlpha(int32 Track, float Alpha)
+{
+    EnsurePlayer();
+    if (!Impl || !Impl->Player.IsValid())
+    {
+        return false;
+    }
+    if (!Impl->Player->SetTrackAlpha(Track, FMath::Clamp(Alpha, 0.0f, 1.0f)))
+    {
+        return false;
+    }
+    ApplyCurrentPose();
+    return true;
+}
+
+bool URigAxisComponent::SetTrackTimeScale(int32 Track, float Scale)
+{
+    EnsurePlayer();
+    return Impl && Impl->Player.IsValid()
+        && Impl->Player->SetTrackTimeScale(Track, Scale);
+}
+
+float URigAxisComponent::GetTrackTime(int32 Track)
+{
+    EnsurePlayer();
+    return Impl && Impl->Player.IsValid()
+        ? Impl->Player->GetTrackTime(Track)
+        : 0.0f;
+}
+
+FName URigAxisComponent::GetCurrentAnimation(int32 Track)
+{
+    EnsurePlayer();
+    return Impl && Impl->Player.IsValid()
+        ? Impl->Player->GetCurrentAnimation(Track)
+        : NAME_None;
+}
+
+float URigAxisComponent::GetAnimationDuration(FName Animation) const
+{
+    return SkeletonAsset ? SkeletonAsset->GetAnimationDuration(Animation) : 0.0f;
+}
+
+float URigAxisComponent::GetCurrentAnimationDuration(int32 Track)
+{
+    EnsurePlayer();
+    return Impl && Impl->Player.IsValid()
+        ? Impl->Player->GetCurrentAnimationDuration(Track)
+        : 0.0f;
 }
 
 void URigAxisComponent::Advance(float DeltaSeconds)
@@ -681,13 +754,7 @@ bool URigAxisComponent::SetSkin(FName Skin)
         return false;
     }
 
-    Impl->Player->Apply();
-    if (Impl->RenderData.IsValid()
-        && Impl->Data.IsValid()
-        && Impl->RenderData->Build(*Impl->Data, *Impl->Player, Tint))
-    {
-        UpdateMesh();
-    }
+    ApplyCurrentPose();
     return true;
 }
 

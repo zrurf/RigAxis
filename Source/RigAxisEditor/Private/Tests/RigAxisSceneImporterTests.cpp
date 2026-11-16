@@ -10,10 +10,12 @@
 #include "Misc/Paths.h"
 #include "ObjectTools.h"
 #include "RigAxisSceneAsset.h"
+#include "RigAxisSceneComponent.h"
 #include "RigAxisSceneFactory.h"
 #include "RigAxisSkeletonAsset.h"
 #include "UObject/GarbageCollection.h"
 #include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FRigAxisSceneImporterTest,
@@ -130,6 +132,14 @@ bool FRigAxisSceneImporterTest::RunTest(const FString& Parameters)
             Objects.Add(Hero);
             TestTrue(TEXT("hero data"), Hero->GetData().IsValid());
         }
+
+        TStrongObjectPtr<URigAxisSceneComponent> Component(NewObject<URigAxisSceneComponent>());
+        Component->SceneAsset = Asset;
+        Component->UpdateMode = ERigAxisUpdateMode::Manual;
+        Component->ResetPhysics();
+        TestEqual(TEXT("actor count"), Component->GetActorCount(), 1);
+        TestEqual(TEXT("actor id"), Component->GetActorId(0), FName(TEXT("hero")));
+        TestEqual(TEXT("actor name"), Component->GetActorName(0), FName(TEXT("Hero")));
     }
 
     for (int32 Index = 0; Index < Objects.Num(); ++Index)

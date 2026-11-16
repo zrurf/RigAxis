@@ -68,15 +68,27 @@ bool FRigAxisRenderData::Build(
     return CopyBatches();
 }
 
-bool FRigAxisRenderData::BuildScene(RigAxisScene* Scene)
+bool FRigAxisRenderData::BuildScene(RigAxisScene* Scene, FString& OutError)
 {
     if (!IsValid() || !Scene)
     {
+        OutError = TEXT("Invalid scene render handle.");
         return false;
     }
 
-    rigaxis_scene_build_render(Scene, Render);
-    return CopyBatches();
+    const RigAxisStatus Status = rigaxis_scene_build_render(Scene, Render);
+    if (Status != RIGAXIS_OK)
+    {
+        OutError = LastError();
+        return false;
+    }
+
+    if (!CopyBatches())
+    {
+        OutError = TEXT("Invalid render batch.");
+        return false;
+    }
+    return true;
 }
 
 bool FRigAxisRenderData::CopyBatches()

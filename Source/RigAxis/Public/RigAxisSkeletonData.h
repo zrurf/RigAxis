@@ -29,6 +29,8 @@ public:
     const FString& GetFormat() const { return Format; }
     const TArray<FString>& GetBoneNames() const { return BoneNames; }
     const TArray<FString>& GetAnimationNames() const { return AnimationNames; }
+    /// Animation durations in seconds, in GetAnimationNames order.
+    const TArray<float>& GetAnimationDurations() const { return AnimationDurations; }
     const TArray<FString>& GetSkinNames() const { return SkinNames; }
     const TArray<FString>& GetAtlasPageNames() const { return AtlasPageNames; }
     /// Non-fatal parse warnings.
@@ -40,6 +42,9 @@ public:
     int32 FindBone(FName Name) const;
     int32 FindAnimation(FName Name) const;
     int32 FindSkin(FName Name) const;
+
+    /// Returns the animation duration in seconds, or 0 when the animation is missing.
+    float GetAnimationDuration(FName Name) const;
 
 private:
     FRigAxisSkeletonData() = default;
@@ -56,6 +61,7 @@ private:
     FString Format;
     TArray<FString> BoneNames;
     TArray<FString> AnimationNames;
+    TArray<float> AnimationDurations;
     TArray<FString> SkinNames;
     TArray<FString> AtlasPageNames;
     TArray<FString> Warnings;

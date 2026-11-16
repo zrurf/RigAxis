@@ -18,6 +18,7 @@ public:
     void Play(const FString& Shot, bool bLoop);
     void Update(double DeltaSeconds);
     void SetTime(double Time);
+    void ResetPhysics();
     double GetDuration() const;
     double GetTime() const;
     FString GetCurrentShot() const;

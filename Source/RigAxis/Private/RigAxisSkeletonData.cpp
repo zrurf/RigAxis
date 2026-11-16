@@ -101,9 +101,12 @@ bool FRigAxisSkeletonData::Initialize(
 
     const uint32 AnimationCount = rigaxis_skeleton_animation_count(Skeleton);
     AnimationNames.Reserve(static_cast<int32>(AnimationCount));
+    AnimationDurations.Reserve(static_cast<int32>(AnimationCount));
     for (uint32 Index = 0; Index < AnimationCount; ++Index)
     {
         AnimationNames.Add(ReadUtf8(rigaxis_skeleton_animation_name(Skeleton, Index)));
+        AnimationDurations.Add(static_cast<float>(
+            rigaxis_skeleton_animation_duration(Skeleton, Index)));
     }
 
     const uint32 SkinCount = rigaxis_skeleton_skin_count(Skeleton);
@@ -166,4 +169,10 @@ int32 FRigAxisSkeletonData::FindSkin(FName Name) const
 {
     const int32* Index = SkinIndexByName.Find(Name);
     return Index ? *Index : INDEX_NONE;
+}
+
+float FRigAxisSkeletonData::GetAnimationDuration(FName Name) const
+{
+    const int32 Index = FindAnimation(Name);
+    return AnimationDurations.IsValidIndex(Index) ? AnimationDurations[Index] : 0.0f;
 }

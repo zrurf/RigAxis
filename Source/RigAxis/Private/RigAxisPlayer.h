@@ -38,6 +38,10 @@ public:
     bool SetTrackAlpha(int32 Track, float Alpha);
     bool SetTrackTimeScale(int32 Track, float Scale);
     bool SetTrackTime(int32 Track, float Time);
+    float GetTrackTime(int32 Track) const;
+    FName GetCurrentAnimation(int32 Track) const;
+    float GetAnimationDuration(FName Animation) const;
+    float GetCurrentAnimationDuration(int32 Track) const;
     void SetSpeed(float Speed);
 
     void Update(double DeltaSeconds);
