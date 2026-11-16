@@ -46,11 +46,29 @@ powershell -ExecutionPolicy Bypass -File Scripts\LinkTestPlugin.ps1
 ```
 
 ```powershell
-& "E:\UnrealEngine\UE_5.8\Engine\Build\BatchFiles\Build.bat" `
+& "<UE_ROOT>\Engine\Build\BatchFiles\Build.bat" `
   RigAxisTestEditor Win64 Development `
-  "E:\Projects\URigby2D\Tests\RigAxisTest\RigAxisTest.uproject" `
+  "<REPO>\Tests\RigAxisTest\RigAxisTest.uproject" `
   -WaitMutex
 ```
+
+Run the Rust tests and clippy:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Scripts\TestRust.ps1
+```
+
+### Updating the bundled runtime
+
+Check out the desired Rigby2D tag in an upstream checkout, then copy the runtime and update
+`UPSTREAM.md` and `THIRD_PARTY_NOTICES.md`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File Scripts\SyncRuntime.ps1 `
+  -Repo "<RIGBY2D_REPO>" -Ref v0.5.1
+```
+
+Then run `Scripts\TestRust.ps1`, rebuild the native library, and rerun the Unreal tests.
 
 ### Android
 
@@ -85,16 +103,21 @@ The script copies libraries to the paths expected by `RigAxis.Build.cs`:
 - `Tests/RigAxisTest/Content/RigAxisTest/Map_RigAxisTest.umap` — skeleton component sample.
 - `Tests/RigAxisTest/Content/RigAxisTest/Map_RigAxisScene.umap` — scene component sample.
 - `Tests/Fixtures/` — original skeleton, atlas, and scene fixtures used by importers and tests.
+- `Tests/Golden/` — frames recorded from the reference JavaScript runtime.
 
 Run the automation suite:
 
 ```powershell
-& "E:\UnrealEngine\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
-  "E:\Projects\URigby2D\Tests\RigAxisTest\RigAxisTest.uproject" `
+& "<UE_ROOT>\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" `
+  "<REPO>\Tests\RigAxisTest\RigAxisTest.uproject" `
   -ExecCmds="Automation RunTests RigAxis; Quit" `
   -unattended -nullrhi -nosplash -stdout `
   -TestExit="Automation Test Queue Empty"
 ```
+
+Golden tests replay the recorded frames through the C ABI and compare bone transforms, vertices,
+colors, and events. To run additional local golden sets, point `RIGAXIS_GOLDEN_DIR` at a directory
+of `.golden.json` files; skeleton and atlas paths resolve next to the golden file first.
 
 ## Limitations
 
