@@ -1806,6 +1806,49 @@ mod tests {
         }
       }
     }"#;
+    const ADDITIVE_SLIDER_SKELETON: &str = r#"{
+      "skeleton": {"spine": "4.3"},
+      "bones": [
+        {"name": "root"},
+        {"name": "control", "parent": "root"},
+        {"name": "target", "parent": "root"}
+      ],
+      "slots": [],
+      "skins": [],
+      "animations": {
+        "base": {
+          "bones": {
+            "target": {
+              "translate": [
+                {"time": 0, "x": 20, "y": 0},
+                {"time": 1, "x": 20, "y": 0}
+              ]
+            }
+          }
+        },
+        "turn": {
+          "bones": {
+            "target": {
+              "translate": [
+                {"time": 0, "x": 10, "y": 0},
+                {"time": 1, "x": 10, "y": 0}
+              ]
+            }
+          }
+        }
+      },
+      "constraints": [
+        {
+          "type": "slider",
+          "name": "turn-slider",
+          "animation": "turn",
+          "bone": "control",
+          "property": "x",
+          "scale": 0.01,
+          "additive": true
+        }
+      ]
+    }"#;
 
     fn empty_event() -> RigAxisEvent {
         RigAxisEvent {
@@ -1933,6 +1976,57 @@ mod tests {
             assert!(affine.b.abs() < 1e-9);
             assert!(affine.c.abs() < 1e-9);
             assert!((affine.d - 1.0).abs() < 1e-9);
+
+            rigaxis_state_free(state);
+            rigaxis_pose_free(pose);
+            rigaxis_skeleton_free(skeleton);
+        }
+    }
+
+    #[test]
+    fn applies_additive_slider_constraints() {
+        unsafe {
+            let mut skeleton: *mut RigAxisSkeleton = ptr::null_mut();
+            let status = rigaxis_skeleton_create(
+                ADDITIVE_SLIDER_SKELETON.as_ptr(),
+                ADDITIVE_SLIDER_SKELETON.len(),
+                &mut skeleton,
+            );
+            assert_eq!(status as i32, RigAxisStatus::Ok as i32);
+
+            let mut pose: *mut RigAxisPose = ptr::null_mut();
+            assert_eq!(
+                rigaxis_pose_create(skeleton, &mut pose) as i32,
+                RigAxisStatus::Ok as i32
+            );
+            let mut state: *mut RigAxisState = ptr::null_mut();
+            assert_eq!(
+                rigaxis_state_create(&mut state) as i32,
+                RigAxisStatus::Ok as i32
+            );
+
+            let name = CString::new("base").unwrap();
+            assert!(rigaxis_state_play(
+                state,
+                skeleton,
+                name.as_ptr(),
+                false,
+                0.0,
+                ptr::null_mut()
+            ));
+            rigaxis_state_update(state, skeleton, 0.5);
+            rigaxis_state_apply(state, skeleton, pose);
+
+            let mut affine = RigAxisAffine {
+                a: 0.0,
+                b: 0.0,
+                c: 0.0,
+                d: 0.0,
+                tx: 0.0,
+                ty: 0.0,
+            };
+            assert!(rigaxis_pose_bone_world(pose, 2, &mut affine));
+            assert!((affine.tx - 30.0).abs() < 1e-9, "got x={}", affine.tx);
 
             rigaxis_state_free(state);
             rigaxis_pose_free(pose);

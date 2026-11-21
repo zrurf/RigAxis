@@ -5,8 +5,8 @@
 RigAxis bundles the Rigby2D Rust runtime.
 
 - Project: https://github.com/jaisurya-dev-art/rigby2d
-- Commit: `3f84269ecd9aa9e6ff09bdb967c05dc42eb2b8c5`
-- Upstream release: `v0.5.1`
+- Commit: `51595fae001f318702d5f7cfb636fde3ca5e7a67`
+- Upstream release: `v0.6.0`
 - Vendored path: `Rust/vendor/rigby2d/runtimes/rust/rigby-runtime`
 - License: MIT OR Apache-2.0
 - Copyright (c) 2026 jaisurya-dev-art

@@ -12,6 +12,7 @@ RigAxis plays Rigby2D skeleton and scene exports inside Unreal Engine, with a Bl
 - Skeleton introspection: bone, animation, and skin names plus animation durations.
 - Animation events exposed as Blueprint delegates.
 - Skins and physics reset.
+- Additive slider constraints used by 2.5D turn rigs.
 - Scene manual stepping, physics reset, and actor id/name enumeration.
 - Custom `FPrimitiveSceneProxy` renderer with per-page, per-blend, and two-color tint materials.
 - Default unlit sprite materials for normal, additive, multiply, and screen blending.
@@ -68,7 +69,7 @@ Check out the desired Rigby2D tag in an upstream checkout, then copy the runtime
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File Scripts\SyncRuntime.ps1 `
-  -Repo "<RIGBY2D_REPO>" -Ref v0.5.1
+  -Repo "<RIGBY2D_REPO>" -Ref v0.6.0
 ```
 
 Then run `Scripts\TestRust.ps1`, rebuild the native library, and rerun the Unreal tests.
