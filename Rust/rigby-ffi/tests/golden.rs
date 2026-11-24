@@ -488,8 +488,8 @@ fn drain_events(state: &State) -> Vec<String> {
 
 fn replay(
     skeleton: &Skeleton,
-    lookup: &Lookup,
-    render: &Render,
+    lookup: Option<&Lookup>,
+    render: Option<&Render>,
     scenario: &Json,
     worst: &mut Worst,
     label: &str,
@@ -551,21 +551,23 @@ fn replay(
             }
         }
 
-        let status = unsafe {
-            rigaxis_render_build(
-                render.0,
-                skeleton.0,
-                pose.0,
-                lookup.0,
-                [1.0f32, 1.0, 1.0, 1.0].as_ptr(),
-            )
-        };
-        if status != RigAxisStatus::Ok {
-            return Err(format!("{at}: render failed: {}", last_error()));
+        if let (Some(lookup), Some(render)) = (lookup, render) {
+            let status = unsafe {
+                rigaxis_render_build(
+                    render.0,
+                    skeleton.0,
+                    pose.0,
+                    lookup.0,
+                    [1.0f32, 1.0, 1.0, 1.0].as_ptr(),
+                )
+            };
+            if status != RigAxisStatus::Ok {
+                return Err(format!("{at}: render failed: {}", last_error()));
+            }
+            let vertices = render_vertices(render);
+            let quads = expected.get("quads").as_array();
+            problems.extend(compare_quads(&vertices, quads, true, worst, &at));
         }
-        let vertices = render_vertices(render);
-        let quads = expected.get("quads").as_array();
-        problems.extend(compare_quads(&vertices, quads, true, worst, &at));
 
         let expected_events: Vec<String> = expected
             .get("events")
@@ -641,6 +643,7 @@ fn matches_reference_frames() {
             }
         };
         let atlas_path = skeleton_path.with_extension("atlas");
+        let check_render = atlas_path.is_file();
 
         let skeleton = match load_skeleton(&skeleton_path) {
             Ok(skeleton) => skeleton,
@@ -649,26 +652,37 @@ fn matches_reference_frames() {
                 continue;
             }
         };
-        let atlas = match load_atlas(&atlas_path) {
-            Ok(atlas) => atlas,
-            Err(error) => {
-                failures.push(format!("{label}: {error}"));
-                continue;
+        let atlas = if check_render {
+            match load_atlas(&atlas_path) {
+                Ok(atlas) => Some(atlas),
+                Err(error) => {
+                    failures.push(format!("{label}: {error}"));
+                    continue;
+                }
             }
+        } else {
+            None
         };
-        let lookup = match create_lookup(&skeleton, &atlas) {
-            Ok(lookup) => lookup,
-            Err(error) => {
-                failures.push(format!("{label}: {error}"));
-                continue;
-            }
+        let lookup = match atlas.as_ref() {
+            Some(atlas) => match create_lookup(&skeleton, atlas) {
+                Ok(lookup) => Some(lookup),
+                Err(error) => {
+                    failures.push(format!("{label}: {error}"));
+                    continue;
+                }
+            },
+            None => None,
         };
-        let render = match create_render() {
-            Ok(render) => render,
-            Err(error) => {
-                failures.push(format!("{label}: {error}"));
-                continue;
+        let render = if check_render {
+            match create_render() {
+                Ok(render) => Some(render),
+                Err(error) => {
+                    failures.push(format!("{label}: {error}"));
+                    continue;
+                }
             }
+        } else {
+            None
         };
 
         let bones = golden.get("bones").as_array().len();
@@ -684,7 +698,14 @@ fn matches_reference_frames() {
             at: String::new(),
         };
         for scenario in golden.get("scenarios").as_array() {
-            match replay(&skeleton, &lookup, &render, scenario, &mut worst, label) {
+            match replay(
+                &skeleton,
+                lookup.as_ref(),
+                render.as_ref(),
+                scenario,
+                &mut worst,
+                label,
+            ) {
                 Ok(problems) => failures.extend(problems),
                 Err(error) => failures.push(format!("{label}: {error}")),
             }

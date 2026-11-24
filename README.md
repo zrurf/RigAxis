@@ -72,6 +72,9 @@ powershell -ExecutionPolicy Bypass -File Scripts\SyncRuntime.ps1 `
   -Repo "<RIGBY2D_REPO>" -Ref v0.6.0
 ```
 
+The current snapshot is `v0.6.0` plus post-release fix `745500a` (placeholder-version curves);
+see `Rust/vendor/rigby2d/UPSTREAM.md` for the exact commit.
+
 Then run `Scripts\TestRust.ps1`, rebuild the native library, and rerun the Unreal tests.
 
 ### Android
@@ -107,7 +110,7 @@ The script copies libraries to the paths expected by `RigAxis.Build.cs`:
 - `Tests/RigAxisTest/Content/RigAxisTest/Map_RigAxisTest.umap` — skeleton component sample.
 - `Tests/RigAxisTest/Content/RigAxisTest/Map_RigAxisScene.umap` — scene component sample.
 - `Tests/Fixtures/` — original skeleton, atlas, and scene fixtures used by importers and tests.
-- `Tests/Golden/` — frames recorded from the reference JavaScript runtime.
+- `Tests/Golden/` — frames recorded from the reference JavaScript runtime, including the synthetic 2.5D turn rig with additive sliders.
 
 Run the automation suite:
 
@@ -120,9 +123,9 @@ Run the automation suite:
 ```
 
 Golden tests replay recorded skeleton and scene frames through the C ABI and compare bone
-transforms, vertices, colors, draw lists, and events. To run additional local golden sets, point
-`RIGAXIS_GOLDEN_DIR` at a directory of `.golden.json` files; skeleton and atlas paths resolve next
-to the golden file first.
+transforms, vertices, colors, draw lists, and events. Goldens without an atlas compare bone
+transforms and events only. To run additional local golden sets, point `RIGAXIS_GOLDEN_DIR` at a
+directory of `.golden.json` files; skeleton and atlas paths resolve next to the golden file first.
 
 ## Limitations
 

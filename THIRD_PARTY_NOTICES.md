@@ -5,8 +5,9 @@
 RigAxis bundles the Rigby2D Rust runtime.
 
 - Project: https://github.com/jaisurya-dev-art/rigby2d
-- Commit: `51595fae001f318702d5f7cfb636fde3ca5e7a67`
+- Commit: `745500a70a88a1868def4f2d5b483a6249fd6055`
 - Upstream release: `v0.6.0`
+- Snapshot: `v0.6.0` plus post-release fix `745500a` from `develop`
 - Vendored path: `Rust/vendor/rigby2d/runtimes/rust/rigby-runtime`
 - License: MIT OR Apache-2.0
 - Copyright (c) 2026 jaisurya-dev-art
@@ -17,6 +18,16 @@ The full license texts are included at:
 - `Rust/vendor/rigby2d/LICENSE-APACHE`
 
 The native static libraries are built from this source and the RigAxis FFI crate. They are generated locally and are not committed.
+
+## Rigby2D test fixtures
+
+`Tests/Golden/turn.golden.json` and `Tests/Fixtures/golden/turn-rig.json` are derived from the
+Rigby2D repository's synthetic turn rig and JavaScript-runtime golden data.
+
+- Project: https://github.com/jaisurya-dev-art/rigby2d
+- Upstream ref: `745500a70a88a1868def4f2d5b483a6249fd6055` (`develop`)
+- License: MIT OR Apache-2.0
+- Copyright (c) 2026 jaisurya-dev-art
 
 ## RigAxis FFI
 

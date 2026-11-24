@@ -1849,6 +1849,19 @@ mod tests {
         }
       ]
     }"#;
+    const IK_STRETCH_SKELETON: &str = r#"{
+      "skeleton": {"spine": "4.2.0"},
+      "bones": [
+        {"name": "root"},
+        {"name": "a", "parent": "root", "length": 100},
+        {"name": "b", "parent": "a", "x": 100, "rotation": __BENT__, "length": 100},
+        {"name": "target", "parent": "root", "x": __TX__, "y": __TY__}
+      ],
+      "slots": [],
+      "ik": [
+        {"name": "ik", "bones": ["a", "b"], "target": "target", "stretch": true}
+      ]
+    }"#;
 
     fn empty_event() -> RigAxisEvent {
         RigAxisEvent {
@@ -2031,6 +2044,56 @@ mod tests {
             rigaxis_state_free(state);
             rigaxis_pose_free(pose);
             rigaxis_skeleton_free(skeleton);
+        }
+    }
+
+    #[test]
+    fn reads_absolute_curves_with_placeholder_version() {
+        use rigby_runtime::curve::Curve;
+        use rigby_runtime::json::Json;
+        use rigby_runtime::model::CH_ROTATE;
+        use rigby_runtime::reader::read_skeleton_json;
+
+        let obj = Json::parse(
+            r#"{
+                "skeleton": {"spine": "0.0.00"},
+                "bones": [{"name": "root"}],
+                "animations": {"walk": {"bones": {"root": {"rotate": [
+                    {"value": -20, "curve": [0.25, -20, 0.75, 20]},
+                    {"time": 1, "value": 20}
+                ]}}}}
+            }"#,
+        )
+        .unwrap();
+        let skeleton = read_skeleton_json(&obj).unwrap();
+        let key = &skeleton.animations[0].bones[0].channels[CH_ROTATE][0];
+        assert_eq!(key.curve, Curve::Bezier([0.25, 0.0, 0.75, 1.0]));
+    }
+
+    #[test]
+    fn stretching_two_bone_ik_reaches_target() {
+        use rigby_runtime::json::Json;
+        use rigby_runtime::reader::read_skeleton_json;
+        use rigby_runtime::Pose;
+
+        for (tx, ty, bent) in [
+            (500.0, 200.0, 0.0),
+            (500.0, 0.0, 40.0),
+            (300.0, 400.0, 0.0),
+            (600.0, -50.0, -30.0),
+        ] {
+            let text = IK_STRETCH_SKELETON
+                .replace("__TX__", &tx.to_string())
+                .replace("__TY__", &ty.to_string())
+                .replace("__BENT__", &bent.to_string());
+            let obj = Json::parse(&text).unwrap();
+            let skeleton = read_skeleton_json(&obj).unwrap();
+            let pose = Pose::new(&skeleton);
+            let tip = pose.world[2].apply(100.0, 0.0);
+            assert!(
+                (tip.0 - tx).abs() < 1e-6 && (tip.1 - ty).abs() < 1e-6,
+                "tip {tip:?} for target ({tx}, {ty})"
+            );
         }
     }
 
